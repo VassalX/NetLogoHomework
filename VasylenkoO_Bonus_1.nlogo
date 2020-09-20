@@ -2,6 +2,10 @@ turtles-own[
   nearest-turtle
 ]
 
+patches-own[
+  new-color
+]
+
 to setup
   clear-all
   create-turtles population [
@@ -26,6 +30,21 @@ to go
       facexy mouse-xcor mouse-ycor
     ]
   ]
+  ask patches [
+    let num-neighbors count neighbors with [pcolor = green]
+    let probability random 8 < num-neighbors
+    if-else (pcolor = green) [
+      if not probability [
+        set new-color black
+      ]
+    ][
+      if probability [
+        set new-color green
+      ]
+    ]
+  ]
+  ask patches [set pcolor new-color]
+  tick
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -73,10 +92,10 @@ NIL
 1
 
 BUTTON
-35
-102
-98
-135
+113
+43
+176
+76
 NIL
 go
 T
@@ -90,25 +109,25 @@ NIL
 1
 
 SLIDER
-38
-148
-210
-181
+32
+90
+204
+123
 population
 population
 0
 100
-1.0
+8.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-39
-188
-211
-221
+33
+130
+205
+163
 percent
 percent
 0

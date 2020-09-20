@@ -1,29 +1,38 @@
 turtles-own[
-  nearest-turtle
+  steps
 ]
 
 to setup
   clear-all
   create-turtles population [
-    set heading random 360
     setxy random-xcor random-ycor
+    set color green
+    set label who
+    set heading 0
+  ]
+  create-turtles population [
+    setxy random-xcor random-ycor
+    set color red
+    set label who
+    set heading 180
   ]
   reset-ticks
 end
 
 to go
   ask turtles [
-    if (abs pxcor = max-pxcor) or (abs pycor = max-pycor) [
-      die
+    if color = green [
+      if random 100 < chance-green [
+        fd 1
+        set steps steps + 1
+      ]
     ]
-    set nearest-turtle min-one-of other turtles [distance myself]
-    if is-turtle? nearest-turtle [
-      face nearest-turtle
-      rt 180
+    if color = red [
+      if random 100 < chance-red [
+        fd 1
+        set steps steps + 1
+      ]
     ]
-  ]
-  ask turtles [
-    fd 1
   ]
   tick
 end
@@ -42,8 +51,8 @@ GRAPHICS-WINDOW
 1
 1
 0
-0
-0
+1
+1
 1
 -16
 16
@@ -56,10 +65,27 @@ ticks
 30.0
 
 BUTTON
-17
-19
-80
-52
+91
+30
+154
+63
+NIL
+go\n
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+18
+28
+81
+61
 NIL
 setup\n
 NIL
@@ -72,55 +98,72 @@ NIL
 NIL
 1
 
-BUTTON
-17
-66
-80
-99
-NIL
-go\n
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 SLIDER
-17
-109
-189
-142
+20
+83
+192
+116
 population
 population
 0
 100
-14.0
+4.0
 1
 1
 NIL
 HORIZONTAL
 
-PLOT
-15
-155
-215
-305
-plot 1
+SLIDER
+21
+130
+193
+163
+chance-red
+chance-red
+0
+100
+20.0
+1
+1
 NIL
+HORIZONTAL
+
+SLIDER
+23
+175
+195
+208
+chance-green
+chance-green
+0
+100
+50.0
+1
+1
 NIL
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 0 -16777216 true "" "plot count turtles"
+HORIZONTAL
+
+MONITOR
+27
+222
+132
+267
+steps of green
+[steps] of one-of turtles with [who = 0]
+17
+1
+11
+
+MONITOR
+27
+272
+121
+317
+steps of red
+[steps] of one-of turtles with [who = population]
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
