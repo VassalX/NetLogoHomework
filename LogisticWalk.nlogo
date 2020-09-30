@@ -27,7 +27,7 @@ to setup
     set color red
     set size 2
     set label who
-    set Angle random 360
+    set Angle (random 360) / 360
     set degree 0
   ]
 
@@ -58,8 +58,8 @@ end
 
 to move
   ask turtles [
-    set Angle  360 * (r * Angle / 360 * (1 - (Angle / 360)))
-    rt  Angle
+    set Angle r * Angle * (1 - (Angle))
+    rt  Angle * 360
     fd 1
   ]
 end
@@ -148,11 +148,11 @@ end
 GRAPHICS-WINDOW
 197
 10
-531
-345
+517
+331
 -1
 -1
-12.54
+12.0
 1
 10
 1
@@ -181,7 +181,7 @@ number
 number
 0
 100
-15.0
+30.0
 1
 1
 NIL
@@ -230,7 +230,7 @@ stop-time
 stop-time
 0
 10000
-4986.0
+5000.0
 1
 1
 NIL
@@ -312,7 +312,7 @@ r
 r
 0
 4
-3.89
+4.0
 0.01
 1
 NIL
@@ -736,6 +736,19 @@ NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="experiment" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <timeLimit steps="5000"/>
+    <metric>CC</metric>
+    <metric>APL</metric>
+    <steppedValueSet variable="r" first="0" step="0.01" last="4"/>
+    <enumeratedValueSet variable="number">
+      <value value="30"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default
