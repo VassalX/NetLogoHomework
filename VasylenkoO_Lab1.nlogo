@@ -18,8 +18,12 @@ links-own [
 
 ; setup
 
-to setup
+to reset-all
   clear-all
+end
+
+to setup
+  clear-turtles
   set APL 0
   set CC 0
   create-turtles number [ setxy random-xcor random-ycor]
@@ -30,6 +34,10 @@ to setup
     set Angle (random 360) / 360
     set degree 0
   ]
+  set-current-plot "CC vs APL"
+  clear-plot
+  set-current-plot "CC and APL vs ticks"
+  clear-plot
 
 
   reset-ticks
@@ -49,6 +57,10 @@ to go
     meet-count
     calculate
   ]
+
+  set-current-plot "CC vs r"
+  plotxy r CC
+  update-plots
 
   ;calculate
 end
@@ -181,7 +193,7 @@ number
 number
 0
 100
-30.0
+20.0
 1
 1
 NIL
@@ -312,7 +324,7 @@ r
 r
 0
 4
-4.0
+3.97
 0.01
 1
 NIL
@@ -380,6 +392,41 @@ BUTTON
 428
 NIL
 calculate-degree
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+PLOT
+563
+70
+763
+220
+CC vs r
+r
+CC
+0.0
+2.0
+0.0
+2.0
+true
+false
+"" ""
+PENS
+"default" 1.0 2 -16777216 true "" ""
+
+BUTTON
+11
+318
+88
+351
+NIL
+reset-all\n
 NIL
 1
 T
@@ -737,15 +784,38 @@ NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="experiment" repetitions="1" runMetricsEveryStep="false">
+  <experiment name="experiment 20 turtles" repetitions="1" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
-    <timeLimit steps="5000"/>
+    <exitCondition>ticks &gt; stop-time</exitCondition>
     <metric>CC</metric>
     <metric>APL</metric>
     <steppedValueSet variable="r" first="0" step="0.01" last="4"/>
     <enumeratedValueSet variable="number">
-      <value value="30"/>
+      <value value="20"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="stop-time">
+      <value value="5000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="show-circle?">
+      <value value="true"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="experiment 40 turtles" repetitions="1" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <exitCondition>ticks &gt; stop-time</exitCondition>
+    <metric>CC</metric>
+    <metric>APL</metric>
+    <steppedValueSet variable="r" first="0" step="0.01" last="4"/>
+    <enumeratedValueSet variable="number">
+      <value value="20"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="stop-time">
+      <value value="5000"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="show-circle?">
+      <value value="true"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>
