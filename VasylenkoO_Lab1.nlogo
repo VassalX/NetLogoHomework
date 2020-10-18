@@ -72,7 +72,7 @@ to move
   ask turtles [
     set Angle r * Angle * (1 - (Angle))
     rt  Angle * 360
-    fd 1
+    fd (random 100) / 100
   ]
 end
 
@@ -324,7 +324,7 @@ r
 r
 0
 4
-3.97
+3.75
 0.01
 1
 NIL

@@ -61,13 +61,13 @@ to draw-maze
     ][
 
       ; Полювання. Беремо випадковий чорний патч
-      let p one-of patches with [pcolor = black]
-
+      let sorted-patches sort (patches with [pcolor = black])
+      let target-patches filter has-white-neighbour? sorted-patches
       ; якщо чорних патчей немає - кінець
-      ifelse (p = nobody) [
+      ifelse (empty? target-patches) [
         stop
       ][
-
+        let p first target-patches
         ; якщо є чорний патч - шукаємо білого сусіда
         let target-patch one-of ([neighbours-black] of p) with [pcolor = white]
         if (target-patch != nobody)[
@@ -89,6 +89,11 @@ to draw-maze
       ]
     ]
   ]
+end
+
+to-report has-white-neighbour? [p]
+  let white-neighbour one-of ([neighbours-black] of p) with [pcolor = white]
+  report white-neighbour != nobody
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -143,6 +148,23 @@ BUTTON
 NIL
 go\n
 T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+52
+142
+115
+175
+NIL
+go\n
+NIL
 1
 T
 OBSERVER
