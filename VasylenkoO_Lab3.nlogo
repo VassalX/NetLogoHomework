@@ -154,13 +154,15 @@ end
 to revise [other-figure]
   if step-performed? [
     ask other-figure [
+      if [shape] of myself != shape [
+        set domain complement domain (get-possible-steps (list ([xcor] of myself) ([ycor] of myself)) shape)
+      ]
       set domain complement domain ([possible-steps] of myself)
     ]
   ]
-  if [step-performed?] of other-figure [
-    set domain complement domain ([possible-steps] of other-figure)
-  ]
-
+;  if [step-performed?] of other-figure [
+;    set domain complement domain ([possible-steps] of other-figure)
+;  ]
 end
 
 to-report complement [A B]
@@ -237,15 +239,79 @@ to update-possible-steps
     ]
   ]
 end
+
+to-report get-possible-steps [pos sh]
+  let x (first pos)
+  let y (last pos)
+  let steps []
+  set steps fput (list x y) steps
+  if sh = "chess bishop" [
+    let i 1
+    while [(y + i <= max-y) and (x + i <= max-x)] [
+      set steps fput (list (x + i) (y + i)) steps
+      set i i + 1
+    ]
+    set i 1
+    while [(y - i > 0) and (x - i > 0)] [
+      set steps fput (list (x - i) (y - i)) steps
+      set i i + 1
+    ]
+    set i 1
+    while [(y + i <= max-y) and (x - i > 0)] [
+      set steps fput (list (x - i) (y + i)) steps
+      set i i + 1
+    ]
+    set i 1
+    while [(y - i > 0) and (x + i <= max-x)] [
+      set steps fput (list (x + i) (y - i)) steps
+      set i i + 1
+    ]
+  ]
+  if sh = "chess knight" [
+    if y + 2 <= max-y [
+      if x < max-x [
+        set steps fput (list (x + 1) (y + 2)) steps
+      ]
+      if x > 1 [
+        set steps fput (list (x - 1) (y + 2)) steps
+      ]
+    ]
+    if y - 2 >= 1 [
+      if x < max-x [
+        set steps fput (list (x + 1) (y - 2)) steps
+      ]
+      if x > 1 [
+        set steps fput (list (x - 1) (y - 2)) steps
+      ]
+    ]
+    if x + 2 <= max-x [
+      if y < max-y [
+        set steps fput (list (x + 2) (y + 1)) steps
+      ]
+      if y > 1 [
+        set steps fput (list (x + 2) (y - 1)) steps
+      ]
+    ]
+    if x - 2 >= 1 [
+      if y < max-y [
+        set steps fput (list (x - 2) (y + 1)) steps
+      ]
+      if y > 1 [
+        set steps fput (list (x - 2) (y - 1)) steps
+      ]
+    ]
+  ]
+  report steps
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 232
 10
-669
-448
+600
+379
 -1
 -1
-13.0
+30.0
 1
 10
 1
@@ -255,10 +321,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--16
-16
--16
-16
+0
+11
+0
+11
 0
 0
 1
@@ -308,7 +374,7 @@ max-x
 max-x
 0
 10
-6.0
+10.0
 1
 1
 NIL
@@ -323,7 +389,7 @@ max-y
 max-y
 0
 10
-6.0
+10.0
 1
 1
 NIL
@@ -383,7 +449,7 @@ knights
 knights
 0
 10
-0.0
+10.0
 1
 1
 NIL
@@ -398,7 +464,7 @@ b-bishops
 b-bishops
 0
 10
-5.0
+10.0
 1
 1
 NIL
@@ -413,7 +479,7 @@ w-bishops
 w-bishops
 0
 10
-5.0
+10.0
 1
 1
 NIL

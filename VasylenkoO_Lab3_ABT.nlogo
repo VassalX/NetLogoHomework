@@ -1,48 +1,144 @@
-extensions [table] ; розширення хеш - таблиці
+breed [figures figure]
+undirected-link-breed [edges edge]
 
-breed [nodes node] ; агенти - вершини графа
+figures-own [domain possible-steps step-performed?]
+edges-own [weight]
 
-globals [colors] ; кольори, які будуть використовуватися
+globals [all-positions x-positions y-positions]
 
-nodes-own [
-  message-queue  ;; список вхідних повідомлень у форматі [тип-повідомлення текст-повідомлення]
-  lower-naybors  ;; список сусідів з меншим пріоритетом
-  naybors        ;; розширений список сусідів
-  local-view     ;; відображення виду (номер-агента - колір)
-  no-goods       ;; список пар (агент колір), які є обмеженнями
-]
-
-; визначення агентів і зв'язків між ними
 to setup
   clear-all
   reset-ticks
-
-  ask patches [set pcolor white]
-  set colors [red blue green yellow]
-
-  create-nodes num-nodes [
-    set shape "circle"
-    setxy random-pxcor random-pycor
-    set color black
+  ask patches[
+    set pcolor grey
+  ]
+  set-positions
+  draw-board
+  create-figures queens [
+    setxy 0 0
+    set color white
+    set domain all-positions
+    set shape "chess queen"
+    set step-performed? false
+    set possible-steps []
+  ]
+  create-figures kings [
+    setxy 1 0
+    set color white
+    set domain all-positions
+    set shape "chess king"
+    set step-performed? false
+    set possible-steps []
+  ]
+  create-figures rooks [
+    setxy 2 0
+    set color white
+    set domain all-positions
+    set shape "chess king"
+    set step-performed? false
+    set possible-steps []
   ]
 
-  repeat num-edges [
-    ask one-of nodes [
-      create-link-with one-of other nodes
+  create-figures knights [
+    setxy 3 0
+    set color white
+    set domain all-positions
+    set shape "chess knight"
+    set step-performed? false
+    set possible-steps []
+  ]
+   create-figures w-bishops [
+    setxy 4 0
+    set color white
+    set domain w-bishops-positions
+    set shape "chess bishop"
+    set step-performed? false
+    set possible-steps []
+  ]
+   create-figures b-bishops [
+    setxy 5 0
+    set color white
+    set domain b-bishops-positions
+    set shape "chess bishop"
+    set step-performed? false
+    set possible-steps []
+  ]
+
+
+  ask figures [
+    create-edges-with other figures
+  ]
+  ask edges [
+    hide-link
+    set weight 1
+  ]
+  ask figures [
+    set label who
+  ]
+
+end
+
+to-report w-bishops-positions
+  report filter [a -> ((first a) mod 2) != ((last a) mod 2)] all-positions
+end
+
+to-report b-bishops-positions
+  report filter [a -> ((first a) mod 2) = ((last a) mod 2)] all-positions
+end
+
+to set-positions
+  set all-positions []
+  set x-positions n-values max-x [[i] -> (i + 1)]
+  set y-positions n-values max-y [[i] -> (i + 1)]
+
+  foreach x-positions [
+    [i] ->
+    foreach y-positions [
+      [j] ->
+      set all-positions fput list (i) (j) all-positions
     ]
   ]
 end
 
-; розташування агентів і зв'язків
-to layout
-  layout-spring nodes links 0.2 5 1
+to draw-board
+  foreach all-positions [
+    [i] ->
+    let x item 0 i
+    let y item 1 i
+    ask patch x y [
+      ifelse (((x mod 2) = 0) xor ((y mod 2) = 0)) [
+        set pcolor 8
+      ][
+      set pcolor brown
+      ]
+    ]
+  ]
+
 end
+
+to assign-figures
+  ask figures [
+    let assignment one-of domain
+    while [count turtles-on patch (item 0 assignment) (item 1 assignment) >= 1]
+    [
+       set assignment one-of domain
+    ]
+    move-to-cell assignment
+  ]
+end
+
+to move-to-cell [a]
+  setxy (item 0 a) (item 1 a)
+
+end
+
+; ABT
 
 ; визначення необхідних для алгоритму АБТ структур і змінних
 to setup-abt
   ; призначаємо випадково кольори, визначаємо множини сусідів
-  ask nodes [
-    set color blue
+  assign-figures
+  ask figures [
     set message-queue []
     set lower-naybors []
     set local-view table:make
@@ -58,231 +154,156 @@ to setup-abt
     ]
     ; встановлення початкових обмежень
     set no-goods []
-     foreach naybors [
-      [a] ->
-      let w ([who] of a)
-      set no-goods sentence no-goods map [
-        [b] ->
-        normalize-nogood list (list who b) (list w b) ] colors
+     foreach domain [
+      [val] ->
+      let steps get-possible-steps val shape
+      foreach naybors [
+        [a] ->
+        let w ([who] of a)
+        set no-goods sentence no-goods map [
+          [b] ->
+          normalize-nogood list (list who (list (first val) (last val))) (list w b)
+        ] steps
+      ]
+      foreach naybors [
+        [a] ->
+        if [shape] of a != shape [
+          let w ([who] of a)
+          foreach [domain] of a [
+            [val] ->
+
+          ]
+        ]
+      ]
     ]
   ]
   ; розсилання повідомлень ок? зі своїм кольором сусідам з нижчим пріоритетом
     ask nodes [send-out-new-value]
 end
 
-to go
-  let important-turtles turtles with [not empty? message-queue]
-  ifelse (count important-turtles > 0) [
+; FILTERING
 
-    ask important-turtles [handle-message]
-  ][
-    ifelse (bad-links = 0)[
-      show "SOLUTION FOUND"
-    ][
-      show "NO MORE MESSAGES. NO SOLUTION"
-    ]
-    stop
+to filtering
+  foreach (sort edge-neighbors)[
+    [a] -> revise a
   ]
 end
 
-to-report bad-links
-   let violated-links links with [
-    [color] of end1 != black and
-    [color] of end2 != black and
-    [color] of end1 = [color] of end2
-]
-report count violated-links
+to go-filtering
+  ask figures [
+    filtering
+  ]
+  let unused-figures figures with [(not step-performed?) and (length domain > 0)]
+  if count unused-figures = 0 [stop]
+  ask one-of unused-figures [
+    move-to-cell one-of domain
+    set step-performed? True
+    update-possible-steps
+  ]
 end
 
-to-report constraint-violations?
+to revise [other-figure]
+  if step-performed? [
+    ask other-figure [
+      if [shape] of myself != shape [
+        set domain complement domain (get-possible-steps (list ([xcor] of myself) ([ycor] of myself)) shape)
+      ]
+      set domain complement domain ([possible-steps] of myself)
+    ]
+  ]
+;  if [step-performed?] of other-figure [
+;    set domain complement domain ([possible-steps] of other-figure)
+;  ]
+end
+
+to-report complement [A B]
+  report (filter [x -> not member? x B] A)
+end
+
+to-report constaint-violations?
   let violated-links links with [
-    [color] of end1 != black and
-    [color] of end2 != black and
-    [color] of end1 = [color] of end2
-]
-report any? violated-links
-end
-
-to-report normalize-nogood [nogood]
-  ;; Сортування обмежень для виключення дублікатів
-  report sort-by [ [a b] -> (first a) < (first b) ] nogood
-end
-
-to send-out-new-value
-  ;; Надсилання ок? сусідам з нижчим пріоритетом
-  let my-message list "ok" (list who color)
-  let i who
-  foreach lower-naybors [ [a] ->
-    ask a [set message-queue (lput my-message message-queue)]
+    member? (list ([xcor] of end2) ([ycor] of end2)) ([possible-steps] of end1) or
+    member? (list ([xcor] of end1) ([ycor] of end1)) ([possible-steps] of end2)
   ]
+  report any? violated-links
 end
 
-to handle-message
- ; обробка повідомлень агентами
+to update-possible-steps
+  report get-possible-steps (list xcor ycor) shape
+end
 
-  if not empty? message-queue [
-    let message first message-queue
-    set message-queue but-first message-queue
-    let message-type first message
-    let message-value last message
-
-    ifelse message-type = "ok" [
-      let someone first message-value
-      let val last message-value
-      handle-ok someone val
-    ][
-      ifelse message-type = "nogood" [
-        handle-nogood message-value
-      ][
-        handle-add-neighbor message-value
+to-report get-possible-steps [pos sh]
+  let x (first pos)
+  let y (last pos)
+  let steps []
+  set steps fput (list x y) steps
+  if sh = "chess bishop" [
+    let i 1
+    while [(y + i <= max-y) and (x + i <= max-x)] [
+      set steps fput (list (x + i) (y + i)) steps
+      set i i + 1
+    ]
+    set i 1
+    while [(y - i > 0) and (x - i > 0)] [
+      set steps fput (list (x - i) (y - i)) steps
+      set i i + 1
+    ]
+    set i 1
+    while [(y + i <= max-y) and (x - i > 0)] [
+      set steps fput (list (x - i) (y + i)) steps
+      set i i + 1
+    ]
+    set i 1
+    while [(y - i > 0) and (x + i <= max-x)] [
+      set steps fput (list (x + i) (y - i)) steps
+      set i i + 1
+    ]
+  ]
+  if sh = "chess knight" [
+    if y + 2 <= max-y [
+      if x < max-x [
+        set steps fput (list (x + 1) (y + 2)) steps
+      ]
+      if x > 1 [
+        set steps fput (list (x - 1) (y + 2)) steps
+      ]
+    ]
+    if y - 2 >= 1 [
+      if x < max-x [
+        set steps fput (list (x + 1) (y - 2)) steps
+      ]
+      if x > 1 [
+        set steps fput (list (x - 1) (y - 2)) steps
+      ]
+    ]
+    if x + 2 <= max-x [
+      if y < max-y [
+        set steps fput (list (x + 2) (y + 1)) steps
+      ]
+      if y > 1 [
+        set steps fput (list (x + 2) (y - 1)) steps
+      ]
+    ]
+    if x - 2 >= 1 [
+      if y < max-y [
+        set steps fput (list (x - 2) (y + 1)) steps
+      ]
+      if y > 1 [
+        set steps fput (list (x - 2) (y - 1)) steps
       ]
     ]
   ]
-end
-
-; обробка повідомлень типу ок?
-to handle-ok [someone val]
-  table:put local-view someone val
-  check-local-view
-end
-
-; обробка повідомлень типу nogood
-to handle-nogood [nogood]
- if(not member? nogood no-goods) [
-    set no-goods fput nogood no-goods
-    ;; for each new neighbor
-    foreach (filter [
-      [a] ->
-      not member? (node first a) naybors ] nogood) [
-      [b] ->
-      let new-naybor turtle (first b)
-      set naybors fput new-naybor naybors
-      table:put local-view (first b) (last b)
-      let message (list "new-neighbor" who)
-      ask new-naybor [
-        set message-queue lput message message-queue
-      ]
-    ]
-    foreach naybors [
-      [a] ->
-      let w ([who] of a)
-      if (w > who) and (not member? a lower-naybors) [
-
-        set lower-naybors fput a lower-naybors
-      ]
-      ]
-
-    check-local-view
-  ]
-
-end
-
-; обробка повідомлень додати нового сусіда
-to handle-add-neighbor [someone]
- if (not (member? (turtle someone) naybors)) [
-    set naybors fput turtle someone naybors
-    foreach naybors [
-      [a] ->
-      let w ([who] of a)
-      if (w > who) [
-         if (w > who) and (not member? a lower-naybors) [
-        set lower-naybors fput a lower-naybors
-         ]
-      ]
-    ]
-   let message (list "ok" (list who color))
-    ask node someone [
-      set message-queue lput message message-queue
-    ]
-  ]
-
-end
-
-; перевірка сумісності свого кольору множині поточних nogoods
-to check-local-view
-  if not can-i-be? color [
-
-     let try-these filter [ [a] ->
-      not (a = color) ] colors
-    let can-be-something-else false
-    while [not empty? try-these] [
-      let try-this first try-these
-      set try-these but-first try-these
-
-      if can-i-be? try-this [
-        set try-these [] ;; break loop
-        set color try-this
-        set can-be-something-else true
-        send-out-new-value
-
-      ]
-    ]
-    if not can-be-something-else [
-      backtrack
-
-    ]
-  ]
-
-end
-
-
-to-report can-i-be? [val]
-
-  table:put local-view who val
-  foreach no-goods [
-    [a] ->
-    if (violates? local-view a) [
-      table:remove local-view who
-      report false
-    ]
-  ]
-  table:remove local-view who
-  report true
-end
-
-;перевірка порушень
-to-report violates? [assignments constraint]
-  foreach constraint [
-    [a] ->
-    if not (table:has-key? assignments (first a) and (table:get assignments first a) = (last a)) [report false]
-  ]
-  report true
-end
-
-; процедура відкату
-to backtrack
-  let no-good normalize-nogood find-new-nogood
-  ifelse(not member? no-good no-goods) [
-    if ([] = no-good) [
-      show "EMPTY NO-GOOD FOUND - NO SOLUTION"
-      stop
-    ]
-    set no-goods fput no-good no-goods
-
-    let index []
-
-    foreach no-good [[a] ->
-      set index fput (first a) index]
-
-    ask (node max index) [
-      set message-queue lput (list "nogood" no-good) message-queue
-    ]
-  ] [ show "NOGOOD"]
-
-end
-
-to-report find-new-nogood
-  report table:to-list local-view
+  report steps
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-210
+232
 10
-647
-448
+600
+379
 -1
 -1
-13.0
+30.0
 1
 10
 1
@@ -292,10 +313,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--16
-16
--16
-16
+0
+11
+0
+11
 0
 0
 1
@@ -303,12 +324,12 @@ ticks
 30.0
 
 BUTTON
-40
-43
-113
-76
+78
+127
+144
+160
 NIL
-setup
+setup\n
 NIL
 1
 T
@@ -320,10 +341,164 @@ NIL
 1
 
 BUTTON
-38
-109
-140
-142
+52
+270
+175
+303
+NIL
+assign-figures
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SLIDER
+36
+171
+208
+204
+max-x
+max-x
+0
+10
+10.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+39
+222
+211
+255
+max-y
+max-y
+0
+10
+10.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+716
+74
+888
+107
+queens
+queens
+0
+10
+0.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+720
+136
+892
+169
+kings
+kings
+0
+10
+0.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+715
+185
+887
+218
+rooks
+rooks
+0
+10
+0.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+717
+236
+889
+269
+knights
+knights
+0
+10
+10.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+720
+288
+892
+321
+b-bishops
+b-bishops
+0
+10
+10.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+724
+340
+896
+373
+w-bishops
+w-bishops
+0
+10
+10.0
+1
+1
+NIL
+HORIZONTAL
+
+BUTTON
+70
+326
+162
+359
+NIL
+go-filtering
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+75
+385
+161
+418
 NIL
 setup-abt
 NIL
@@ -335,81 +510,6 @@ NIL
 NIL
 NIL
 1
-
-BUTTON
-40
-162
-103
-195
-NIL
-go
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-SLIDER
-37
-224
-209
-257
-num-nodes
-num-nodes
-0
-100
-6.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-39
-276
-211
-309
-num-edges
-num-edges
-0
-100
-10.0
-1
-1
-NIL
-HORIZONTAL
-
-BUTTON
-50
-331
-125
-364
-NIL
-layout
-T
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-MONITOR
-714
-58
-786
-103
-NIL
-bad-links
-17
-1
-11
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -503,6 +603,107 @@ Circle -16777216 true false 30 180 90
 Polygon -16777216 true false 162 80 132 78 134 135 209 135 194 105 189 96 180 89
 Circle -7500403 true true 47 195 58
 Circle -7500403 true true 195 195 58
+
+chess bishop
+false
+0
+Circle -7500403 true true 135 35 30
+Circle -16777216 false false 135 35 30
+Rectangle -7500403 true true 90 255 210 300
+Line -16777216 false 75 255 225 255
+Rectangle -16777216 false false 90 255 210 300
+Polygon -7500403 true true 105 255 120 165 180 165 195 255
+Polygon -16777216 false false 105 255 120 165 180 165 195 255
+Rectangle -7500403 true true 105 165 195 150
+Rectangle -16777216 false false 105 150 195 165
+Line -16777216 false 137 59 162 59
+Polygon -7500403 true true 135 60 120 75 120 105 120 120 105 120 105 90 90 105 90 120 90 135 105 150 195 150 210 135 210 120 210 105 195 90 165 60
+Polygon -16777216 false false 135 60 120 75 120 120 105 120 105 90 90 105 90 135 105 150 195 150 210 135 210 105 165 60
+
+chess king
+false
+0
+Polygon -7500403 true true 105 255 120 90 180 90 195 255
+Polygon -16777216 false false 105 255 120 90 180 90 195 255
+Polygon -7500403 true true 120 85 105 40 195 40 180 85
+Polygon -16777216 false false 119 85 104 40 194 40 179 85
+Rectangle -7500403 true true 105 105 195 75
+Rectangle -16777216 false false 105 75 195 105
+Rectangle -7500403 true true 90 255 210 300
+Line -16777216 false 75 255 225 255
+Rectangle -16777216 false false 90 255 210 300
+Rectangle -7500403 true true 165 23 134 13
+Rectangle -7500403 true true 144 0 154 44
+Polygon -16777216 false false 153 0 144 0 144 13 133 13 133 22 144 22 144 41 154 41 154 22 165 22 165 12 153 12
+
+chess knight
+false
+0
+Line -16777216 false 75 255 225 255
+Polygon -7500403 true true 90 255 60 255 60 225 75 180 75 165 60 135 45 90 60 75 60 45 90 30 120 30 135 45 240 60 255 75 255 90 255 105 240 120 225 105 180 120 210 150 225 195 225 210 210 255
+Polygon -16777216 false false 210 255 60 255 60 225 75 180 75 165 60 135 45 90 60 75 60 45 90 30 120 30 135 45 240 60 255 75 255 90 255 105 240 120 225 105 180 120 210 150 225 195 225 210
+Line -16777216 false 255 90 240 90
+Circle -16777216 true false 134 63 24
+Line -16777216 false 103 34 108 45
+Line -16777216 false 80 41 88 49
+Line -16777216 false 61 53 70 58
+Line -16777216 false 64 75 79 75
+Line -16777216 false 53 100 67 98
+Line -16777216 false 63 126 69 123
+Line -16777216 false 71 148 77 145
+Rectangle -7500403 true true 90 255 210 300
+Rectangle -16777216 false false 90 255 210 300
+
+chess pawn
+false
+0
+Circle -7500403 true true 105 65 90
+Circle -16777216 false false 105 65 90
+Rectangle -7500403 true true 90 255 210 300
+Line -16777216 false 75 255 225 255
+Rectangle -16777216 false false 90 255 210 300
+Polygon -7500403 true true 105 255 120 165 180 165 195 255
+Polygon -16777216 false false 105 255 120 165 180 165 195 255
+Rectangle -7500403 true true 105 165 195 150
+Rectangle -16777216 false false 105 150 195 165
+
+chess queen
+false
+0
+Circle -7500403 true true 140 11 20
+Circle -16777216 false false 139 11 20
+Circle -7500403 true true 120 22 60
+Circle -16777216 false false 119 20 60
+Rectangle -7500403 true true 90 255 210 300
+Line -16777216 false 75 255 225 255
+Rectangle -16777216 false false 90 255 210 300
+Polygon -7500403 true true 105 255 120 90 180 90 195 255
+Polygon -16777216 false false 105 255 120 90 180 90 195 255
+Rectangle -7500403 true true 105 105 195 75
+Rectangle -16777216 false false 105 75 195 105
+Polygon -7500403 true true 120 75 105 45 195 45 180 75
+Polygon -16777216 false false 120 75 105 45 195 45 180 75
+Circle -7500403 true true 180 35 20
+Circle -16777216 false false 180 35 20
+Circle -7500403 true true 140 35 20
+Circle -16777216 false false 140 35 20
+Circle -7500403 true true 100 35 20
+Circle -16777216 false false 99 35 20
+Line -16777216 false 105 90 195 90
+
+chess rook
+false
+0
+Rectangle -7500403 true true 90 255 210 300
+Line -16777216 false 75 255 225 255
+Rectangle -16777216 false false 90 255 210 300
+Polygon -7500403 true true 90 255 105 105 195 105 210 255
+Polygon -16777216 false false 90 255 105 105 195 105 210 255
+Rectangle -7500403 true true 75 90 120 60
+Rectangle -7500403 true true 75 84 225 105
+Rectangle -7500403 true true 135 90 165 60
+Rectangle -7500403 true true 180 90 225 60
+Polygon -16777216 false false 90 105 75 105 75 60 120 60 120 84 135 84 135 60 165 60 165 84 179 84 180 60 225 60 225 105
 
 circle
 false
