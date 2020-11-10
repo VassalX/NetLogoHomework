@@ -167,30 +167,14 @@ to setup-abt
     ]
     ; встановлення початкових обмежень
     set no-goods []
-    foreach domain [
-      [val] ->
-      set-possible-steps val shape
-      foreach naybors [
-        [a] ->
-        let w ([who] of a)
-        set no-goods sentence no-goods map [
-          [b] ->
-          normalize-nogood list (list who (list (first val) (last val))) (list w b)] possible-steps
-      ]
-    ]
     foreach naybors [
       [a] ->
-      if shape != [shape] of a [
-        let w ([who] of a)
-        foreach [domain] of a [
-          [val] ->
-          set-possible-steps val ([shape] of a)
-          set no-goods sentence no-goods map [
-            [b] ->
-            normalize-nogood list (list w (list (first val) (last val))) (list who b) ] possible-steps
-         ]
-       ]
-     ]
+      let w ([who] of a)
+      set no-goods sentence no-goods map [
+        [b] ->
+        normalize-nogood list (list who (get-possible-steps b shape)) (list w (get-possible-steps b ([shape] of a)))
+      ] domain
+    ]
     update-possible-steps
    ]
   ; розсилання повідомлень ок? зі своїм кольором сусідам з нижчим пріоритетом
@@ -262,6 +246,7 @@ end
 
 ; обробка повідомлень типу ок?
 to handle-ok [someone val]
+  show "handle ok"
   table:put local-view someone val
   check-local-view
 end
@@ -326,9 +311,10 @@ to check-local-view
       not (a = (list xcor ycor)) ] domain
     let can-be-something-else false
     while [not empty? try-these] [
+      show "try-these"
+      show try-these
       let try-this first try-these
       set try-these but-first try-these
-
       if can-i-be? try-this [
         set try-these [] ;; break loop
         move-to-cell try-this
@@ -347,8 +333,7 @@ to check-local-view
 end
 
 to-report can-i-be? [val]
-
-  table:put local-view who val
+  table:put local-view who (get-possible-steps val shape)
   foreach no-goods [
     [a] ->
     if (violates? local-view a) [
@@ -364,7 +349,11 @@ end
 to-report violates? [assignments constraint]
   foreach constraint [
     [a] ->
-    if not (table:has-key? assignments (first a) and (table:get assignments first a) = (last a)) [report false]
+    ;if not (table:has-key? assignments (first a) and (table:get assignments first a) = (last a)) [report false]
+    if not table:has-key? assignments (first a) [report false]
+    let steps-1 (table:get assignments (first a))
+    let steps-2 (last a)
+    if (member? (last steps-1) steps-2) or (member? (last steps-2) steps-1) [report false]
   ]
   report true
 end
