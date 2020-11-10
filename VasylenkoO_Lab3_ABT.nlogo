@@ -1,7 +1,20 @@
+extensions [table] ; розширення хеш - таблиці
+
 breed [figures figure]
+
 undirected-link-breed [edges edge]
 
-figures-own [domain possible-steps step-performed?]
+figures-own [
+  domain
+  possible-steps
+  step-performed?
+  message-queue  ;; список вхідних повідомлень у форматі [тип-повідомлення текст-повідомлення]
+  lower-naybors  ;; список сусідів з меншим пріоритетом
+  naybors        ;; розширений список сусідів
+  local-view     ;; відображення виду (номер-агента - колір)
+  no-goods       ;; список пар (агент колір), які є обмеженнями
+]
+
 edges-own [weight]
 
 globals [all-positions x-positions y-positions]
@@ -154,82 +167,236 @@ to setup-abt
     ]
     ; встановлення початкових обмежень
     set no-goods []
-     foreach domain [
+    foreach domain [
       [val] ->
-      let steps get-possible-steps val shape
+      set-possible-steps val shape
       foreach naybors [
         [a] ->
         let w ([who] of a)
         set no-goods sentence no-goods map [
           [b] ->
-          normalize-nogood list (list who (list (first val) (last val))) (list w b)
-        ] steps
-      ]
-      foreach naybors [
-        [a] ->
-        if [shape] of a != shape [
-          let w ([who] of a)
-          foreach [domain] of a [
-            [val] ->
-
-          ]
-        ]
+          normalize-nogood list (list who (list (first val) (last val))) (list w b)] possible-steps
       ]
     ]
-  ]
-  ; розсилання повідомлень ок? зі своїм кольором сусідам з нижчим пріоритетом
-    ask nodes [send-out-new-value]
-end
-
-; FILTERING
-
-to filtering
-  foreach (sort edge-neighbors)[
-    [a] -> revise a
-  ]
-end
-
-to go-filtering
-  ask figures [
-    filtering
-  ]
-  let unused-figures figures with [(not step-performed?) and (length domain > 0)]
-  if count unused-figures = 0 [stop]
-  ask one-of unused-figures [
-    move-to-cell one-of domain
-    set step-performed? True
+    foreach naybors [
+      [a] ->
+      if shape != [shape] of a [
+        let w ([who] of a)
+        foreach [domain] of a [
+          [val] ->
+          set-possible-steps val ([shape] of a)
+          set no-goods sentence no-goods map [
+            [b] ->
+            normalize-nogood list (list w (list (first val) (last val))) (list who b) ] possible-steps
+         ]
+       ]
+     ]
     update-possible-steps
-  ]
+   ]
+  ; розсилання повідомлень ок? зі своїм кольором сусідам з нижчим пріоритетом
+    ask figures [send-out-new-value]
 end
 
-to revise [other-figure]
-  if step-performed? [
-    ask other-figure [
-      if [shape] of myself != shape [
-        set domain complement domain (get-possible-steps (list ([xcor] of myself) ([ycor] of myself)) shape)
-      ]
-      set domain complement domain ([possible-steps] of myself)
+to go-abt
+  tick
+  let important-turtles turtles with [not empty? message-queue]
+  ifelse (count important-turtles > 0) [
+    ask important-turtles [handle-message]
+  ][
+    ifelse (not constraint-violations?)[
+      show "SOLUTION FOUND"
+    ][
+      show "NO MORE MESSAGES. NO SOLUTION"
     ]
+    stop
   ]
-;  if [step-performed?] of other-figure [
-;    set domain complement domain ([possible-steps] of other-figure)
-;  ]
 end
 
-to-report complement [A B]
-  report (filter [x -> not member? x B] A)
-end
-
-to-report constaint-violations?
-  let violated-links links with [
+to-report violated-links
+  report links with [
     member? (list ([xcor] of end2) ([ycor] of end2)) ([possible-steps] of end1) or
     member? (list ([xcor] of end1) ([ycor] of end1)) ([possible-steps] of end2)
   ]
+end
+
+to-report constraint-violations?
   report any? violated-links
 end
 
+to-report normalize-nogood [nogood]
+  ;; Сортування обмежень для виключення дублікатів
+  report sort-by [ [a b] -> (first a) < (first b) ] nogood
+end
+
+to send-out-new-value
+  ;; Надсилання ок? сусідам з нижчим пріоритетом
+  let my-message list "ok" (list who possible-steps)
+  let i who
+  foreach lower-naybors [ [a] ->
+    ask a [set message-queue (lput my-message message-queue)]
+  ]
+end
+
+to handle-message
+ ; обробка повідомлень агентами
+
+  if not empty? message-queue [
+    let message first message-queue
+    set message-queue but-first message-queue
+    let message-type first message
+    let message-value last message
+
+    ifelse message-type = "ok" [
+      let someone first message-value
+      let val last message-value
+      handle-ok someone val
+    ][
+      ifelse message-type = "nogood" [
+        handle-nogood message-value
+      ][
+        handle-add-neighbor message-value
+      ]
+    ]
+  ]
+end
+
+; обробка повідомлень типу ок?
+to handle-ok [someone val]
+  table:put local-view someone val
+  check-local-view
+end
+
+; обробка повідомлень типу nogood
+to handle-nogood [nogood]
+ if(not member? nogood no-goods) [
+    set no-goods fput nogood no-goods
+    ;; for each new neighbor
+    foreach (filter [
+      [a] ->
+      not member? (figure first a) naybors ] nogood) [
+      [b] ->
+      let new-naybor turtle (first b)
+      set naybors fput new-naybor naybors
+      table:put local-view (first b) (last b)
+      let message (list "new-neighbor" who)
+      ask new-naybor [
+        set message-queue lput message message-queue
+      ]
+    ]
+    foreach naybors [
+      [a] ->
+      let w ([who] of a)
+      if (w > who) and (not member? a lower-naybors) [
+
+        set lower-naybors fput a lower-naybors
+      ]
+      ]
+
+    check-local-view
+  ]
+
+end
+
+; обробка повідомлень додати нового сусіда
+to handle-add-neighbor [someone]
+ if (not (member? (turtle someone) naybors)) [
+    set naybors fput turtle someone naybors
+    foreach naybors [
+      [a] ->
+      let w ([who] of a)
+      if (w > who) [
+         if (w > who) and (not member? a lower-naybors) [
+        set lower-naybors fput a lower-naybors
+         ]
+      ]
+    ]
+   let message (list "ok" (list who (list xcor ycor)))
+    ask figure someone [
+      set message-queue lput message message-queue
+    ]
+  ]
+
+end
+
+; перевірка сумісності свого кольору множині поточних nogoods
+to check-local-view
+  if not can-i-be? (list xcor ycor) [
+
+     let try-these filter [ [a] ->
+      not (a = (list xcor ycor)) ] domain
+    let can-be-something-else false
+    while [not empty? try-these] [
+      let try-this first try-these
+      set try-these but-first try-these
+
+      if can-i-be? try-this [
+        set try-these [] ;; break loop
+        move-to-cell try-this
+        update-possible-steps
+        set can-be-something-else true
+        send-out-new-value
+
+      ]
+    ]
+    if not can-be-something-else [
+      backtrack
+
+    ]
+  ]
+
+end
+
+to-report can-i-be? [val]
+
+  table:put local-view who val
+  foreach no-goods [
+    [a] ->
+    if (violates? local-view a) [
+      table:remove local-view who
+      report false
+    ]
+  ]
+  table:remove local-view who
+  report true
+end
+
+;перевірка порушень
+to-report violates? [assignments constraint]
+  foreach constraint [
+    [a] ->
+    if not (table:has-key? assignments (first a) and (table:get assignments first a) = (last a)) [report false]
+  ]
+  report true
+end
+
+; процедура відкату
+to backtrack
+  let no-good normalize-nogood find-new-nogood
+  ifelse(not member? no-good no-goods) [
+    if ([] = no-good) [
+      show "EMPTY NO-GOOD FOUND - NO SOLUTION"
+      stop
+    ]
+    set no-goods fput no-good no-goods
+
+    let index []
+
+    foreach no-good [[a] ->
+      set index fput (first a) index]
+
+    ask (figure max index) [
+      set message-queue lput (list "nogood" no-good) message-queue
+    ]
+  ] [ show "NOGOOD"]
+
+end
+
+to-report find-new-nogood
+  report table:to-list local-view
+end
+
 to update-possible-steps
-  report get-possible-steps (list xcor ycor) shape
+  set possible-steps get-possible-steps (list xcor ycor) shape
 end
 
 to-report get-possible-steps [pos sh]
@@ -294,6 +461,10 @@ to-report get-possible-steps [pos sh]
     ]
   ]
   report steps
+end
+
+to set-possible-steps [pos sh]
+  set possible-steps get-possible-steps pos sh
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -366,7 +537,7 @@ max-x
 max-x
 0
 10
-10.0
+5.0
 1
 1
 NIL
@@ -381,7 +552,7 @@ max-y
 max-y
 0
 10
-10.0
+5.0
 1
 1
 NIL
@@ -441,7 +612,7 @@ knights
 knights
 0
 10
-10.0
+0.0
 1
 1
 NIL
@@ -456,7 +627,7 @@ b-bishops
 b-bishops
 0
 10
-10.0
+4.0
 1
 1
 NIL
@@ -471,19 +642,19 @@ w-bishops
 w-bishops
 0
 10
-10.0
+0.0
 1
 1
 NIL
 HORIZONTAL
 
 BUTTON
-70
-326
-162
-359
+75
+385
+161
+418
 NIL
-go-filtering
+setup-abt
 NIL
 1
 T
@@ -495,13 +666,30 @@ NIL
 1
 
 BUTTON
-75
-385
-161
-418
+81
+464
+150
+497
 NIL
-setup-abt
+go-abt
 NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+81
+521
+150
+554
+NIL
+go-abt
+T
 1
 T
 OBSERVER

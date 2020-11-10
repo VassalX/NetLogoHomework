@@ -178,66 +178,7 @@ to-report constaint-violations?
 end
 
 to update-possible-steps
-  let x xcor
-  let y ycor
-  set possible-steps []
-  set possible-steps fput (list x y) possible-steps
-  if shape = "chess bishop" [
-    let i 1
-    while [(y + i <= max-y) and (x + i <= max-x)] [
-      set possible-steps fput (list (x + i) (y + i)) possible-steps
-      set i i + 1
-    ]
-    set i 1
-    while [(y - i > 0) and (x - i > 0)] [
-      set possible-steps fput (list (x - i) (y - i)) possible-steps
-      set i i + 1
-    ]
-    set i 1
-    while [(y + i <= max-y) and (x - i > 0)] [
-      set possible-steps fput (list (x - i) (y + i)) possible-steps
-      set i i + 1
-    ]
-    set i 1
-    while [(y - i > 0) and (x + i <= max-x)] [
-      set possible-steps fput (list (x + i) (y - i)) possible-steps
-      set i i + 1
-    ]
-  ]
-  if shape = "chess knight" [
-    if y + 2 <= max-y [
-      if x < max-x [
-        set possible-steps fput (list (x + 1) (y + 2)) possible-steps
-      ]
-      if x > 1 [
-        set possible-steps fput (list (x - 1) (y + 2)) possible-steps
-      ]
-    ]
-    if y - 2 >= 1 [
-      if x < max-x [
-        set possible-steps fput (list (x + 1) (y - 2)) possible-steps
-      ]
-      if x > 1 [
-        set possible-steps fput (list (x - 1) (y - 2)) possible-steps
-      ]
-    ]
-    if x + 2 <= max-x [
-      if y < max-y [
-        set possible-steps fput (list (x + 2) (y + 1)) possible-steps
-      ]
-      if y > 1 [
-        set possible-steps fput (list (x + 2) (y - 1)) possible-steps
-      ]
-    ]
-    if x - 2 >= 1 [
-      if y < max-y [
-        set possible-steps fput (list (x - 2) (y + 1)) possible-steps
-      ]
-      if y > 1 [
-        set possible-steps fput (list (x - 2) (y - 1)) possible-steps
-      ]
-    ]
-  ]
+  set possible-steps get-possible-steps (list xcor ycor) shape
 end
 
 to-report get-possible-steps [pos sh]

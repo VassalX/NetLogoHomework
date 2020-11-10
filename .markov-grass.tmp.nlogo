@@ -1,16 +1,49 @@
-to-report constaint-violations?
-  let violated-links links with [
-    member? (list ([xcor] of end2) ([ycor] of end2)) ([possible-steps] of end1) or
-    member? (list ([xcor] of end1) ([ycor] of end1]) ([possible-steps] of end2)
+globals [weather]
+
+patches-own [growth]
+
+to setup
+  clear-all
+  set weather one-of ["wet" "dry"]
+  ask patches [
+    set growth random 11
+    set pcolor scale-color green growth 10 0
   ]
-  report any? violated-links
+  reset-ticks
 end
 
-to update-possible-steps [sh val]
-  let x first val
-  let y first val
-  let possible-steps []
-  if sh = "c
+to go
+  markov-rain
+  growth-grass
+  tick
+  if ticks = 200 [stop]
+end
+
+to markov-rain
+  ifelse weather = "wet" [
+    if random-float 1 < wtd [
+      set weather "dry"
+    ]
+  ][
+    if random-float 1 < dtw [
+      set weather "wet"
+    ]
+  ]
+end
+
+to growth-grass
+  ifelse weather = "wet" [
+    ask patches with [growth < 10][
+      set growth growth + 1
+      set pcolor scale-color green growth 10 0
+    ]
+   ][
+    ask patches with [growth > 0][
+      set growth growth - 1
+      set pcolor scale-color green growth 10 0
+    ]
+   ]
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
@@ -38,6 +71,99 @@ GRAPHICS-WINDOW
 1
 ticks
 30.0
+
+BUTTON
+41
+63
+104
+96
+NIL
+setup\n
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+47
+134
+110
+167
+NIL
+go
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SLIDER
+47
+190
+219
+223
+wtd
+wtd
+0
+1
+1.0
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+49
+244
+221
+277
+dtw
+dtw
+0
+1
+1.0
+0.01
+1
+NIL
+HORIZONTAL
+
+MONITOR
+43
+304
+102
+349
+NIL
+weather
+17
+1
+11
+
+PLOT
+677
+32
+877
+182
+plot 1
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"mean growth" 1.0 0 -13345367 true "" "plot mean [growth] of patches"
 
 @#$#@#$#@
 ## WHAT IS IT?
