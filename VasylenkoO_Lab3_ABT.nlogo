@@ -170,6 +170,11 @@ to setup-abt
     foreach naybors [
       [a] ->
       let w ([who] of a)
+;      let pos (list ([xcor] of a) ([ycor] of a))
+;      let steps-1 get-possible-steps pos shape
+;      let steps-2 get-possible-steps pos ([shape] of a)
+;      set no-goods sentence no-goods (normalize-nogood list (list who steps-1) (list w steps-2))
+
       set no-goods sentence no-goods map [
         [b] ->
         normalize-nogood list (list who (get-possible-steps b shape)) (list w (get-possible-steps b ([shape] of a)))
@@ -347,13 +352,16 @@ end
 
 ;перевірка порушень
 to-report violates? [assignments constraint]
+  show "violates?"
+  show assignments
+  show constraint
   foreach constraint [
     [a] ->
     ;if not (table:has-key? assignments (first a) and (table:get assignments first a) = (last a)) [report false]
     if not table:has-key? assignments (first a) [report false]
     let steps-1 (table:get assignments (first a))
     let steps-2 (last a)
-    if (member? (last steps-1) steps-2) or (member? (last steps-2) steps-1) [report false]
+    if (not member? (last steps-1) steps-2) and (not member? (last steps-2) steps-1) [report false]
   ]
   report true
 end
@@ -616,7 +624,7 @@ b-bishops
 b-bishops
 0
 10
-4.0
+3.0
 1
 1
 NIL

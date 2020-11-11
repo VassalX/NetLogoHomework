@@ -1,10 +1,18 @@
 extensions [table] ; розширення хеш - таблиці
 
 breed [nodes node] ; агенти - вершини графа
+undirected-link-breed [edges edge]
+edges-own [weight]
 
-globals [colors] ; кольори, які будуть використовуватися
+globals [all-positions white-positions black-positions] ; кольори, які будуть використовуватися
 
 nodes-own [
+  domain ;; == color
+  pos
+  occupied-pos
+  figure-type
+  colors
+
   message-queue  ;; список вхідних повідомлень у форматі [тип-повідомлення текст-повідомлення]
   lower-naybors  ;; список сусідів з меншим пріоритетом
   naybors        ;; розширений список сусідів
@@ -17,32 +25,61 @@ to setup
   clear-all
   reset-ticks
 
-  ask patches [set pcolor white]
-  set colors [red blue green yellow]
+  ask patches[
+    set pcolor grey
+  ]
+  set-positions
+  draw-board
 
-  create-nodes num-nodes [
-    set shape "circle"
-    setxy random-pxcor random-pycor
+  create-nodes knights [
+    set color white
+    set colors all-positions
+    set domain all-positions
+    set figure-type "knight"
+    set shape "chess knight"
+  ]
+  create-nodes w-bishops [
+    set color white
+    set colors white-positions
+    set domain white-positions
+    set figure-type "white-bishop"
+    set shape "chess bishop"
+  ]
+  create-nodes b-bishops [
     set color black
+    set colors black-positions
+    set domain black-positions
+    set figure-type "black-bishop"
+    set shape "chess bishop"
   ]
 
-  repeat num-edges [
-    ask one-of nodes [
-      create-link-with one-of other nodes
-    ]
+  ask nodes [
+    create-edges-with other nodes
   ]
-end
+  ask edges [
+    hide-link
+    set weight 1
+  ]
+  ask nodes [
+    ; set label who
+  ]
 
-; розташування агентів і зв'язків
-to layout
-  layout-spring nodes links 0.2 5 1
+  setup-abt
 end
 
 ; визначення необхідних для алгоритму АБТ структур і змінних
 to setup-abt
   ; призначаємо випадково кольори, визначаємо множини сусідів
   ask nodes [
-    set color blue
+    set pos one-of domain
+    while [count turtles-on patch (item 0 pos) (item 1 pos) >= 1]
+    [
+       set pos one-of domain
+    ]
+    move-to-cell pos
+
+    set occupied-pos figure-occupied
+
     set message-queue []
     set lower-naybors []
     set local-view table:make
@@ -58,19 +95,25 @@ to setup-abt
     ]
     ; встановлення початкових обмежень
     set no-goods []
-     foreach naybors [
-      [a] ->
-      let w ([who] of a)
-      set no-goods sentence no-goods map [
-        [b] ->
-        normalize-nogood list (list who b) (list w b) ] colors
+    let initial-pos pos
+
+    foreach naybors [[neighbor] ->
+      let w ([who] of neighbor)
+      foreach domain [[coordinates] ->
+        set pos coordinates
+        move-to-cell pos
+        set no-goods sentence no-goods (figure-occupied-nogoods w)  ; (bishop-occupied-nogoods w)
+      ]
     ]
+    set pos initial-pos
+    move-to-cell pos
   ]
   ; розсилання повідомлень ок? зі своїм кольором сусідам з нижчим пріоритетом
-    ask nodes [send-out-new-value]
+  ask nodes [send-out-new-value]
 end
 
 to go
+  tick
   let important-turtles turtles with [not empty? message-queue]
   ifelse (count important-turtles > 0) [
 
@@ -85,13 +128,77 @@ to go
   ]
 end
 
+to-report figure-occupied
+  let occupancy []
+  if figure-type = "knight" [
+    set occupancy knight-occupied
+  ]
+  if figure-type = "white-bishop" or figure-type = "black-bishop" [
+    set occupancy bishop-occupied
+  ]
+  report occupancy
+end
+
+to-report figure-occupied-nogoods [neighbor]
+  let nogoods []
+
+  let mine []
+  set mine lput who mine
+  set mine lput pos mine
+
+  let occupied figure-occupied
+
+  foreach occupied [[coordinates] ->
+    let tmp lput (normalize-nogood (list mine (list neighbor coordinates))) []
+    set nogoods (sentence nogoods tmp)
+  ]
+  report nogoods
+end
+
+to-report bishop-occupied
+  let steps n-values max-x [[i] -> (i + 1)]
+  set steps but-first steps ;; as not to count the current position
+  let dirs [45 -45 135 -135]
+  let occupancy fput pos []
+
+  foreach steps [[step] ->
+    foreach dirs [[dir] ->
+      ask patch-at-heading-and-distance dir step [
+        if pxcor > 0 and pycor > 0 and pxcor <= max-x and pycor <= max-y [
+          set occupancy lput (list pxcor pycor) occupancy
+        ]
+      ]
+    ]
+  ]
+  report occupancy
+end
+
+to-report knight-occupied
+  let occupancy fput pos []
+  let moves [[1 2] [2 1] [2 -1] [1 -2] [-1 -2] [-2 -1] [-2 1] [-1 2]]
+
+  let x 0
+  let y 0
+  foreach moves [[move] ->
+    set x (first pos) + (first move)
+    set y (last pos) + (last move)
+    if x > 0 and y > 0 and x <= max-x and y <= max-y [
+      let to-put (list x y)
+      if not member? to-put occupancy [
+        set occupancy lput (list x y) occupancy
+      ]
+    ]
+  ]
+  report occupancy
+end
+
 to-report bad-links
-   let violated-links links with [
-    [color] of end1 != black and
-    [color] of end2 != black and
-    [color] of end1 = [color] of end2
-]
-report count violated-links
+  let violated-links links with [
+    [pos] of end1 = [pos] of end2 or
+    member? [pos] of end1 [occupied-pos] of end2 or
+    member? [pos] of end2 [occupied-pos] of end1
+  ]
+  report count violated-links
 end
 
 to-report constraint-violations?
@@ -110,7 +217,7 @@ end
 
 to send-out-new-value
   ;; Надсилання ок? сусідам з нижчим пріоритетом
-  let my-message list "ok" (list who color)
+  let my-message list "ok" (list who pos)
   let i who
   foreach lower-naybors [ [a] ->
     ask a [set message-queue (lput my-message message-queue)]
@@ -134,7 +241,8 @@ to handle-message
       ifelse message-type = "nogood" [
         handle-nogood message-value
       ][
-        handle-add-neighbor message-value
+        ; show "add-neighbor"
+        ; handle-add-neighbor message-value
       ]
     ]
   ]
@@ -190,7 +298,7 @@ to handle-add-neighbor [someone]
          ]
       ]
     ]
-   let message (list "ok" (list who color))
+   let message (list "ok" (list who pos))
     ask node someone [
       set message-queue lput message message-queue
     ]
@@ -200,17 +308,22 @@ end
 
 ; перевірка сумісності свого кольору множині поточних nogoods
 to check-local-view
-  if not can-i-be? color [
+  if not can-i-be? pos [
 
      let try-these filter [ [a] ->
-      not (a = color) ] colors
+      not (a = pos) ] colors
     let can-be-something-else false
     while [not empty? try-these] [
       let try-this first try-these
       set try-these but-first try-these
+
       if can-i-be? try-this [
         set try-these [] ;; break loop
-        set color try-this
+        set pos try-this
+
+        move-to-cell try-this
+
+        set occupied-pos figure-occupied
         set can-be-something-else true
         send-out-new-value
 
@@ -218,15 +331,12 @@ to check-local-view
     ]
     if not can-be-something-else [
       backtrack
-
     ]
   ]
 
 end
 
-
 to-report can-i-be? [val]
-
   table:put local-view who val
   foreach no-goods [
     [a] ->
@@ -273,15 +383,57 @@ end
 to-report find-new-nogood
   report table:to-list local-view
 end
+
+;;;;;;;;;;;
+;; CHESS ;;
+;;;;;;;;;;;
+to set-positions
+  set all-positions []
+  set white-positions []
+  set black-positions []
+  let x-positions n-values max-x [[i] -> (i + 1)]
+  let y-positions n-values max-y [[i] -> (i + 1)]
+
+  foreach x-positions [[i] ->
+    foreach y-positions [[j] ->
+      ifelse (remainder (i + j) 2) = 0 [
+        set black-positions fput list i j black-positions
+      ][
+        set white-positions fput list i j white-positions
+      ]
+      set all-positions fput list i j all-positions
+    ]
+  ]
+end
+
+to draw-board
+  foreach all-positions [
+    [i] ->
+    let x item 0 i
+    let y item 1 i
+    ask patch x y [
+      ifelse (((x mod 2) = 0) xor ((y mod 2) = 0)) [
+        set pcolor 8
+      ][
+      set pcolor brown
+      ]
+    ]
+  ]
+
+end
+
+to move-to-cell [a]
+  setxy (item 0 a) (item 1 a)
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
 10
-647
-448
+578
+379
 -1
 -1
-13.0
+30.0
 1
 10
 1
@@ -291,10 +443,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--16
-16
--16
-16
+0
+11
+0
+11
 0
 0
 1
@@ -319,30 +471,13 @@ NIL
 1
 
 BUTTON
-38
-109
-140
-142
-NIL
-setup-abt
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
 40
 162
 103
 195
 NIL
 go
-NIL
+T
 1
 T
 OBSERVER
@@ -353,51 +488,34 @@ NIL
 1
 
 SLIDER
-37
-224
-209
-257
-num-nodes
-num-nodes
+679
+337
+851
+370
+max-x
+max-x
 0
-100
-6.0
+15
+5.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-39
-276
-211
-309
-num-edges
-num-edges
+678
+381
+850
+414
+max-y
+max-y
 0
-100
-10.0
+15
+5.0
 1
 1
 NIL
 HORIZONTAL
-
-BUTTON
-50
-331
-125
-364
-NIL
-layout
-T
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
 
 MONITOR
 714
@@ -409,6 +527,51 @@ bad-links
 17
 1
 11
+
+SLIDER
+674
+118
+846
+151
+w-bishops
+w-bishops
+0
+15
+0.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+674
+205
+846
+238
+knights
+knights
+0
+25
+3.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+674
+162
+846
+195
+b-bishops
+b-bishops
+0
+15
+4.0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -502,6 +665,107 @@ Circle -16777216 true false 30 180 90
 Polygon -16777216 true false 162 80 132 78 134 135 209 135 194 105 189 96 180 89
 Circle -7500403 true true 47 195 58
 Circle -7500403 true true 195 195 58
+
+chess bishop
+false
+0
+Circle -7500403 true true 135 35 30
+Circle -16777216 false false 135 35 30
+Rectangle -7500403 true true 90 255 210 300
+Line -16777216 false 75 255 225 255
+Rectangle -16777216 false false 90 255 210 300
+Polygon -7500403 true true 105 255 120 165 180 165 195 255
+Polygon -16777216 false false 105 255 120 165 180 165 195 255
+Rectangle -7500403 true true 105 165 195 150
+Rectangle -16777216 false false 105 150 195 165
+Line -16777216 false 137 59 162 59
+Polygon -7500403 true true 135 60 120 75 120 105 120 120 105 120 105 90 90 105 90 120 90 135 105 150 195 150 210 135 210 120 210 105 195 90 165 60
+Polygon -16777216 false false 135 60 120 75 120 120 105 120 105 90 90 105 90 135 105 150 195 150 210 135 210 105 165 60
+
+chess king
+false
+0
+Polygon -7500403 true true 105 255 120 90 180 90 195 255
+Polygon -16777216 false false 105 255 120 90 180 90 195 255
+Polygon -7500403 true true 120 85 105 40 195 40 180 85
+Polygon -16777216 false false 119 85 104 40 194 40 179 85
+Rectangle -7500403 true true 105 105 195 75
+Rectangle -16777216 false false 105 75 195 105
+Rectangle -7500403 true true 90 255 210 300
+Line -16777216 false 75 255 225 255
+Rectangle -16777216 false false 90 255 210 300
+Rectangle -7500403 true true 165 23 134 13
+Rectangle -7500403 true true 144 0 154 44
+Polygon -16777216 false false 153 0 144 0 144 13 133 13 133 22 144 22 144 41 154 41 154 22 165 22 165 12 153 12
+
+chess knight
+false
+0
+Line -16777216 false 75 255 225 255
+Polygon -7500403 true true 90 255 60 255 60 225 75 180 75 165 60 135 45 90 60 75 60 45 90 30 120 30 135 45 240 60 255 75 255 90 255 105 240 120 225 105 180 120 210 150 225 195 225 210 210 255
+Polygon -16777216 false false 210 255 60 255 60 225 75 180 75 165 60 135 45 90 60 75 60 45 90 30 120 30 135 45 240 60 255 75 255 90 255 105 240 120 225 105 180 120 210 150 225 195 225 210
+Line -16777216 false 255 90 240 90
+Circle -16777216 true false 134 63 24
+Line -16777216 false 103 34 108 45
+Line -16777216 false 80 41 88 49
+Line -16777216 false 61 53 70 58
+Line -16777216 false 64 75 79 75
+Line -16777216 false 53 100 67 98
+Line -16777216 false 63 126 69 123
+Line -16777216 false 71 148 77 145
+Rectangle -7500403 true true 90 255 210 300
+Rectangle -16777216 false false 90 255 210 300
+
+chess pawn
+false
+0
+Circle -7500403 true true 105 65 90
+Circle -16777216 false false 105 65 90
+Rectangle -7500403 true true 90 255 210 300
+Line -16777216 false 75 255 225 255
+Rectangle -16777216 false false 90 255 210 300
+Polygon -7500403 true true 105 255 120 165 180 165 195 255
+Polygon -16777216 false false 105 255 120 165 180 165 195 255
+Rectangle -7500403 true true 105 165 195 150
+Rectangle -16777216 false false 105 150 195 165
+
+chess queen
+false
+0
+Circle -7500403 true true 140 11 20
+Circle -16777216 false false 139 11 20
+Circle -7500403 true true 120 22 60
+Circle -16777216 false false 119 20 60
+Rectangle -7500403 true true 90 255 210 300
+Line -16777216 false 75 255 225 255
+Rectangle -16777216 false false 90 255 210 300
+Polygon -7500403 true true 105 255 120 90 180 90 195 255
+Polygon -16777216 false false 105 255 120 90 180 90 195 255
+Rectangle -7500403 true true 105 105 195 75
+Rectangle -16777216 false false 105 75 195 105
+Polygon -7500403 true true 120 75 105 45 195 45 180 75
+Polygon -16777216 false false 120 75 105 45 195 45 180 75
+Circle -7500403 true true 180 35 20
+Circle -16777216 false false 180 35 20
+Circle -7500403 true true 140 35 20
+Circle -16777216 false false 140 35 20
+Circle -7500403 true true 100 35 20
+Circle -16777216 false false 99 35 20
+Line -16777216 false 105 90 195 90
+
+chess rook
+false
+0
+Rectangle -7500403 true true 90 255 210 300
+Line -16777216 false 75 255 225 255
+Rectangle -16777216 false false 90 255 210 300
+Polygon -7500403 true true 90 255 105 105 195 105 210 255
+Polygon -16777216 false false 90 255 105 105 195 105 210 255
+Rectangle -7500403 true true 75 90 120 60
+Rectangle -7500403 true true 75 84 225 105
+Rectangle -7500403 true true 135 90 165 60
+Rectangle -7500403 true true 180 90 225 60
+Polygon -16777216 false false 90 105 75 105 75 60 120 60 120 84 135 84 135 60 165 60 165 84 179 84 180 60 225 60 225 105
 
 circle
 false
