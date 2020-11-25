@@ -1,82 +1,188 @@
-turtles-own [
-  hat-color
-  num-neighbors-required
-]
-
-globals [
-  count-pink
-]
+extensions [table]
+globals [u headings actions]
 
 to setup
- clear-all
- reset-ticks
-  ask patches [
-    sprout 1 [
-      set shape "circle"
-      set color grey
-      set num-neighbors-required 1 + random number-required
+  clear-all
+  reset-ticks
+  ask patches [set plabel-color green]
+  ask patches with [
+    abs pxcor = max-pxcor or abs pycor = max-pycor]
+  [set pcolor white]
+  ask patches with [pxcor = max-pxcor and pycor = 0]
+  [set pcolor brown]
+  ask patches with [
+    abs pxcor < max-pxcor and abs pycor < max-pycor]
+  [
+    if-else random 100 < walls-probability[
+      set pcolor white
+    ][
+      if-else random 100 < ice-probability[
+        set pcolor cyan
+      ][
+        set pcolor black
+      ]
     ]
   ]
-
-   ask n-of numer-initial turtles [
-    set color pink
+  set headings [0 90 180 270]
+  set actions ["fd 1" "lt 90" "rt 90"]
+  set u table:make
+  create-turtles num [
+    let p one-of patches with [pcolor = black]
+    setxy [pxcor] of p [pycor] of p
+    set color blue
+    set heading one-of headings
   ]
-
-  ask n-of num-influence turtles with [color = grey] [
-    set color pink
-  ]
-
-  set count-pink count turtles with [color = pink]
 end
-
 
 to go
   tick
   ask turtles [
-    if random 100 < probability [
-      if count turtles in-radius 5 with [color = pink] + num-influence > num-neighbors-required [
-        set color pink
+    take-best-action
+  ]
+
+end
+
+to put-utility [x y dir utility]
+  let state (list x y dir)
+  table:put u state utility
+end
+
+to-report get-utility [x y dir]
+  let state (list x y dir)
+  if (table:has-key? u state) [
+    report table:get u (list x y dir)
+  ]
+  put-utility x y dir 0
+  report 0
+end
+
+to value-iteration
+  let delta 10000
+  let my-turtle 0
+  create-turtles 1 [
+    set my-turtle self
+    set hidden? true
+  ]
+
+  while [delta > epsilon * (1 - gamma) / gamma][
+    set delta 0
+    ask patches [
+      foreach headings [
+        [h] -> let dir h
+        let x pxcor
+        let y pycor
+        let best-action 0
+        ask my-turtle [
+          setxy x y
+          set heading dir
+          let best-utility item 1 get-best-action
+          let current-utility get-utility x y dir
+          let new-utility (get-reward + gamma * best-utility)
+          put-utility x y dir new-utility
+          if (abs (current-utility - new-utility) > delta)[
+            set delta abs (current-utility - new-utility)
+          ]
+          set plabel (precision current-utility 1)
+        ]
       ]
     ]
+    plot delta
   ]
-  set count-pink count turtles with [color = pink]
-  if count turtles with [color = grey] = 0 [stop]
+  ask my-turtle [die]
+end
+
+to-report get-best-action
+  let x xcor
+  let y ycor
+  let dir heading
+  let best-action 0
+  let best-utility -10000
+  foreach actions [
+    [a] ->
+    run a  ; take action
+    let utility-of-action get-utility xcor ycor heading
+    if (utility-of-action > best-utility)[
+    set best-action a
+    set best-utility utility-of-action
+    ]
+    setxy x y
+    set heading dir
+  ]
+  report (list best-action best-utility)
+end
+
+to take-best-action
+  let best-action first get-best-action
+  let chosen-action 0
+  if-else pcolor = cyan [
+    set chosen-action one-of actions
+  ][
+    if-else random 100 < best-probability [
+      set chosen-action best-action
+    ]
+    [
+      set chosen-action one-of filter [x -> x != best-action] actions
+    ]
+  ]
+  run chosen-action
+end
+
+to-report get-reward
+  if (pcolor = brown) [report 50]
+  if (pcolor = white) [report -200]
+  if (pcolor = black) [report -0.5]
+  if (pcolor = cyan) [report -1]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
 10
-673
-474
+728
+529
 -1
 -1
-8.922
+30.0
 1
 10
 1
 1
 1
 0
+0
+0
 1
-1
-1
--25
-25
--25
-25
+-8
+8
+-8
+8
 0
 0
 1
 ticks
 30.0
 
-BUTTON
-31
-27
-97
-60
+SLIDER
+740
+12
+912
+45
+num
+num
+0
+100
+3.0
+1
+1
 NIL
-setup
+HORIZONTAL
+
+BUTTON
+59
+23
+122
+56
+NIL
+setup\n
 NIL
 1
 T
@@ -88,13 +194,13 @@ NIL
 1
 
 BUTTON
-29
-249
-92
-282
+133
+23
+196
+56
 NIL
 go
-T
+NIL
 1
 T
 OBSERVER
@@ -105,42 +211,76 @@ NIL
 1
 
 SLIDER
-31
-81
-203
-114
-number-required
-number-required
+741
+62
+913
+95
+epsilon
+epsilon
 0
-25
-48.0
-1
+0.1
+0.01
+0.005
 1
 NIL
 HORIZONTAL
 
 SLIDER
-28
-122
-200
-155
-numer-initial
-numer-initial
+740
+110
+912
+143
+gamma
+gamma
 0
-10
-5.0
 1
+0.95
+0.05
 1
 NIL
 HORIZONTAL
 
+BUTTON
+62
+69
+198
+102
+NIL
+value-iteration
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+PLOT
+747
+369
+947
+519
+delta
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+
 SLIDER
-28
-205
-200
-238
-probability
-probability
+739
+157
+911
+190
+best-probability
+best-probability
 0
 100
 100.0
@@ -150,30 +290,34 @@ NIL
 HORIZONTAL
 
 SLIDER
-32
-164
+741
 204
-197
-num-influence
-num-influence
+913
+237
+walls-probability
+walls-probability
 0
-10
-1.0
+100
+20.0
 1
 1
 NIL
 HORIZONTAL
 
-MONITOR
-106
+SLIDER
+742
 255
-177
-300
-NIL
-count-pink
-17
+914
+288
+ice-probability
+ice-probability
+0
+100
+10.0
 1
-11
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -521,92 +665,6 @@ NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
-<experiments>
-  <experiment name="probability" repetitions="1" runMetricsEveryStep="false">
-    <setup>setup</setup>
-    <go>go</go>
-    <timeLimit steps="1000"/>
-    <exitCondition>count turtles with [color = grey] = 0</exitCondition>
-    <enumeratedValueSet variable="num-influence">
-      <value value="1"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="number-required">
-      <value value="5"/>
-    </enumeratedValueSet>
-    <steppedValueSet variable="probability" first="1" step="1" last="100"/>
-    <enumeratedValueSet variable="numer-initial">
-      <value value="5"/>
-    </enumeratedValueSet>
-  </experiment>
-  <experiment name="num-required" repetitions="1" runMetricsEveryStep="false">
-    <setup>setup</setup>
-    <go>go</go>
-    <timeLimit steps="500"/>
-    <exitCondition>count turtles with [color = grey] = 0</exitCondition>
-    <metric>count-pink</metric>
-    <enumeratedValueSet variable="num-influence">
-      <value value="0"/>
-    </enumeratedValueSet>
-    <steppedValueSet variable="number-required" first="1" step="1" last="25"/>
-    <enumeratedValueSet variable="probability">
-      <value value="100"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="numer-initial">
-      <value value="5"/>
-    </enumeratedValueSet>
-  </experiment>
-  <experiment name="num-required-1" repetitions="1" runMetricsEveryStep="false">
-    <setup>setup</setup>
-    <go>go</go>
-    <timeLimit steps="2000"/>
-    <exitCondition>count turtles with [color = grey] = 0</exitCondition>
-    <metric>count-pink</metric>
-    <enumeratedValueSet variable="num-influence">
-      <value value="1"/>
-    </enumeratedValueSet>
-    <steppedValueSet variable="number-required" first="1" step="1" last="25"/>
-    <enumeratedValueSet variable="probability">
-      <value value="100"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="numer-initial">
-      <value value="5"/>
-    </enumeratedValueSet>
-  </experiment>
-  <experiment name="num-required-2000" repetitions="1" runMetricsEveryStep="false">
-    <setup>setup</setup>
-    <go>go</go>
-    <timeLimit steps="2000"/>
-    <exitCondition>count turtles with [color = grey] = 0</exitCondition>
-    <metric>count-pink</metric>
-    <enumeratedValueSet variable="num-influence">
-      <value value="0"/>
-    </enumeratedValueSet>
-    <steppedValueSet variable="number-required" first="1" step="1" last="25"/>
-    <enumeratedValueSet variable="probability">
-      <value value="100"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="numer-initial">
-      <value value="5"/>
-    </enumeratedValueSet>
-  </experiment>
-  <experiment name="num-required-1-50" repetitions="1" runMetricsEveryStep="false">
-    <setup>setup</setup>
-    <go>go</go>
-    <timeLimit steps="2000"/>
-    <exitCondition>count turtles with [color = grey] = 0</exitCondition>
-    <metric>count-pink</metric>
-    <enumeratedValueSet variable="num-influence">
-      <value value="1"/>
-    </enumeratedValueSet>
-    <steppedValueSet variable="number-required" first="1" step="1" last="50"/>
-    <enumeratedValueSet variable="probability">
-      <value value="100"/>
-    </enumeratedValueSet>
-    <enumeratedValueSet variable="numer-initial">
-      <value value="5"/>
-    </enumeratedValueSet>
-  </experiment>
-</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default
