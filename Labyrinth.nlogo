@@ -4,7 +4,7 @@ globals [u headings actions]
 to setup
   clear-all
   reset-ticks
-  ask patches [set plabel-color green]
+  ask patches [set plabel-color yellow]
   ask patches with [
     abs pxcor = max-pxcor or abs pycor = max-pycor]
   [set pcolor white]
@@ -16,10 +16,14 @@ to setup
     if-else random 100 < walls-probability[
       set pcolor white
     ][
-      if-else random 100 < ice-probability[
-        set pcolor cyan
+      if-else random 100 < rest-probability[
+        set pcolor green
       ][
-        set pcolor black
+        if-else random 100 < fire-probability[
+          set pcolor red
+        ][
+          set pcolor black
+        ]
       ]
     ]
   ]
@@ -35,13 +39,14 @@ to setup
 end
 
 to go
-  tick
+  if any? turtles with [pcolor = red] or all? turtles [pcolor = brown][
+    stop
+  ]
   ask turtles [
     take-best-action
   ]
-  if all? turtles [pcolor = brown] [
-    stop
-  ]
+  show count turtles with [pcolor = red]
+  tick
 end
 
 to put-utility [x y dir utility]
@@ -130,10 +135,11 @@ to take-best-action
 end
 
 to-report get-reward
-  if (pcolor = brown) [report 50]
-  if (pcolor = white) [report -200]
-  if (pcolor = black) [report -0.5]
-  if (pcolor = cyan) [report -1]
+  if (pcolor = brown) [report target-reward]
+  if (pcolor = white) [report wall-reward]
+  if (pcolor = black) [report path-reward]
+  if (pcolor = red) [report fire-reward]
+  if (pcolor = green) [report rest-reward]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -172,17 +178,17 @@ num
 num
 0
 100
-3.0
+2.0
 1
 1
 NIL
 HORIZONTAL
 
 BUTTON
-63
-33
-126
-66
+59
+23
+122
+56
 NIL
 setup\n
 NIL
@@ -196,10 +202,10 @@ NIL
 1
 
 BUTTON
-63
-110
-126
-143
+133
+23
+196
+56
 NIL
 go
 NIL
@@ -236,8 +242,8 @@ gamma
 gamma
 0
 1
-0.95
-0.05
+0.97
+0.01
 1
 NIL
 HORIZONTAL
@@ -311,8 +317,23 @@ SLIDER
 255
 914
 288
-ice-probability
-ice-probability
+fire-probability
+fire-probability
+0
+100
+20.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+744
+303
+916
+336
+rest-probability
+rest-probability
 0
 100
 10.0
@@ -321,22 +342,60 @@ ice-probability
 NIL
 HORIZONTAL
 
-BUTTON
-139
-115
-202
-148
-NIL
-go
-T
+INPUTBOX
+48
+117
+203
+177
+wall-reward
+-200.0
 1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
+0
+Number
+
+INPUTBOX
+50
+186
+205
+246
+fire-reward
+-100.0
 1
+0
+Number
+
+INPUTBOX
+51
+256
+206
+316
+path-reward
+-0.5
+1
+0
+Number
+
+INPUTBOX
+51
+322
+206
+382
+target-reward
+50.0
+1
+0
+Number
+
+INPUTBOX
+52
+390
+207
+450
+rest-reward
+5.0
+1
+0
+Number
 
 @#$#@#$#@
 ## WHAT IS IT?
