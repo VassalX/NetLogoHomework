@@ -35,23 +35,6 @@ to setup
     set step-performed? false
     set possible-steps []
   ]
-  create-figures kings [
-    setxy 1 0
-    set color white
-    set domain all-positions
-    set shape "chess king"
-    set step-performed? false
-    set possible-steps []
-  ]
-  create-figures rooks [
-    setxy 2 0
-    set color white
-    set domain all-positions
-    set shape "chess king"
-    set step-performed? false
-    set possible-steps []
-  ]
-
   create-figures knights [
     setxy 3 0
     set color white
@@ -60,23 +43,6 @@ to setup
     set step-performed? false
     set possible-steps []
   ]
-   create-figures w-bishops [
-    setxy 4 0
-    set color white
-    set domain w-bishops-positions
-    set shape "chess bishop"
-    set step-performed? false
-    set possible-steps []
-  ]
-   create-figures b-bishops [
-    setxy 5 0
-    set color white
-    set domain b-bishops-positions
-    set shape "chess bishop"
-    set step-performed? false
-    set possible-steps []
-  ]
-
 
   ask figures [
     create-edges-with other figures
@@ -142,10 +108,7 @@ end
 
 to move-to-cell [a]
   setxy (item 0 a) (item 1 a)
-
 end
-
-; ABT
 
 ; визначення необхідних для алгоритму АБТ структур і змінних
 to setup-abt
@@ -397,6 +360,10 @@ to-report find-new-nogood
   report table:to-list local-view
 end
 
+to set-possible-steps [pos sh]
+  set possible-steps get-possible-steps pos sh
+end
+
 to update-possible-steps
   set possible-steps get-possible-steps (list xcor ycor) shape
 end
@@ -406,7 +373,7 @@ to-report get-possible-steps [pos sh]
   let y (last pos)
   let steps []
   set steps fput (list x y) steps
-  if sh = "chess bishop" [
+  if sh = "chess queen" [
     let i 1
     while [(y + i <= max-y) and (x + i <= max-x)] [
       set steps fput (list (x + i) (y + i)) steps
@@ -427,6 +394,21 @@ to-report get-possible-steps [pos sh]
       set steps fput (list (x + i) (y - i)) steps
       set i i + 1
     ]
+    set i 1
+    while [i <= max-y] [
+      if i != y [
+        set steps fput (list x i) steps
+      ]
+      set i i + 1
+    ]
+    set i 1
+    while [i <= max-x] [
+      if i != x [
+        set steps fput (list i y) steps
+      ]
+      set i i + 1
+    ]
+
   ]
   if sh = "chess knight" [
     if y + 2 <= max-y [
@@ -464,10 +446,6 @@ to-report get-possible-steps [pos sh]
   ]
   report steps
 end
-
-to set-possible-steps [pos sh]
-  set possible-steps get-possible-steps pos sh
-end
 @#$#@#$#@
 GRAPHICS-WINDOW
 232
@@ -497,10 +475,10 @@ ticks
 30.0
 
 BUTTON
-38
-115
-104
-148
+33
+97
+99
+130
 NIL
 setup\n
 NIL
@@ -513,28 +491,11 @@ NIL
 NIL
 1
 
-BUTTON
-38
-270
-161
-303
-NIL
-assign-figures
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 SLIDER
 37
-166
+14
 209
-199
+47
 max-x
 max-x
 0
@@ -546,10 +507,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-39
-222
-211
-255
+35
+54
+207
+87
 max-y
 max-y
 0
@@ -561,89 +522,29 @@ NIL
 HORIZONTAL
 
 SLIDER
-716
-74
-888
-107
+613
+68
+785
+101
 queens
 queens
 0
 10
-0.0
+4.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-717
+613
 115
-889
+785
 148
-kings
-kings
-0
-10
-0.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-717
-158
-889
-191
-rooks
-rooks
-0
-10
-0.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-714
-232
-886
-265
 knights
 knights
 0
 20
-8.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-714
-278
-886
-311
-b-bishops
-b-bishops
-0
-10
-0.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-715
-325
-887
-358
-w-bishops
-w-bishops
-0
-10
 0.0
 1
 1
@@ -651,10 +552,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-38
-318
-124
-351
+110
+98
+196
+131
 NIL
 setup-abt
 NIL
@@ -668,10 +569,10 @@ NIL
 1
 
 BUTTON
-38
-367
-107
-400
+34
+139
+103
+172
 NIL
 go-abt
 NIL
@@ -685,10 +586,10 @@ NIL
 1
 
 BUTTON
-120
-368
-189
-401
+114
+139
+183
+172
 NIL
 go-abt
 T
@@ -702,10 +603,10 @@ NIL
 1
 
 MONITOR
-718
-9
-814
-54
+615
+10
+711
+55
 NIL
 count bad-links
 17

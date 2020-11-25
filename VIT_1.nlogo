@@ -1,268 +1,122 @@
-breed [figures figure]
-undirected-link-breed [edges edge]
-
-figures-own [domain possible-steps step-performed?]
-edges-own [weight]
-
-globals [all-positions x-positions y-positions]
+globals [current-action r current-utility]
 
 to setup
   clear-all
   reset-ticks
-  ask patches[
-    set pcolor grey
-  ]
-  set-positions
-  draw-board
-  create-figures queens [
-    setxy 0 0
-    set color white
-    set domain all-positions
-    set shape "chess queen"
-    set step-performed? false
-    set possible-steps []
-  ]
-  create-figures kings [
-    setxy 1 0
-    set color white
-    set domain all-positions
-    set shape "chess king"
-    set step-performed? false
-    set possible-steps []
-  ]
-  create-figures rooks [
-    setxy 2 0
-    set color white
-    set domain all-positions
-    set shape "chess king"
-    set step-performed? false
-    set possible-steps []
-  ]
-
-  create-figures knights [
-    setxy 3 0
-    set color white
-    set domain all-positions
-    set shape "chess knight"
-    set step-performed? false
-    set possible-steps []
-  ]
-   create-figures w-bishops [
-    setxy 4 0
-    set color white
-    set domain w-bishops-positions
-    set shape "chess bishop"
-    set step-performed? false
-    set possible-steps []
-  ]
-   create-figures b-bishops [
-    setxy 5 0
-    set color white
-    set domain b-bishops-positions
-    set shape "chess bishop"
-    set step-performed? false
-    set possible-steps []
-  ]
-
-
-  ask figures [
-    create-edges-with other figures
-  ]
-  ask edges [
-    hide-link
-    set weight 1
-  ]
-  ask figures [
-    set label who
-  ]
-
+  ask patch -1 0 [set pcolor white
+  set plabel "wall  "
+  set plabel-color black]
+  ask patch 1 1 [set pcolor green
+  set plabel green-reward
+  set plabel-color black]
+  ask patch 1 0 [set pcolor red
+  set plabel red-reward
+  set plabel-color black]
+  create-turtles 1 [
+    set color blue
+    set size 0.7
+    set shape "person"
+    setxy -2 -1]
 end
 
-to-report w-bishops-positions
-  report filter [a -> ((first a) mod 2) != ((last a) mod 2)] all-positions
+to go
+  tick
+   perform-action
+  calculate-reward
 end
 
-to-report b-bishops-positions
-  report filter [a -> ((first a) mod 2) = ((last a) mod 2)] all-positions
+to to-left
+  set current-action "left"
+  go
 end
 
-to set-positions
-  set all-positions []
-  set x-positions n-values max-x [[i] -> (i + 1)]
-  set y-positions n-values max-y [[i] -> (i + 1)]
+to to-right
+  set current-action "right"
+  go
+end
 
-  foreach x-positions [
-    [i] ->
-    foreach y-positions [
-      [j] ->
-      set all-positions fput list (i) (j) all-positions
+to to-up
+  set current-action "up"
+  go
+end
+
+to perform-action
+  ask turtles [
+  if ((current-action = "left") and (check-constraints (pxcor - 1) pycor) = true)
+  [
+      setxy pxcor - 1 pycor
+   ]
+  if ((current-action = "right") and (check-constraints (pxcor + 1) pycor))
+  [
+      setxy pxcor + 1 pycor
+   ]
+  if ((current-action = "up") and (check-constraints pxcor  (pycor + 1)))
+  [
+      setxy pxcor pycor + 1
+   ]
+
+
+  ]
+end
+
+to calculate-reward
+  ask turtles [
+    let my-patch patch-here
+    if (([pcolor] of my-patch) = green) [
+
+    set current-utility current-utility + green-reward
+   ]
+
+  if (([pcolor] of my-patch) = red) [
+    set current-utility current-utility + red-reward
+   ]
+
+   if (([pcolor] of my-patch) = black) [
+
+    set current-utility current-utility + black-reward
     ]
+
   ]
 end
 
-to draw-board
-  foreach all-positions [
-    [i] ->
-    let x item 0 i
-    let y item 1 i
-    ask patch x y [
-      ifelse (((x mod 2) = 0) xor ((y mod 2) = 0)) [
-        set pcolor 8
-      ][
-      set pcolor brown
-      ]
-    ]
+to-report check-constraints [x y]
+  let f false
+
+  if (x <= max-pxcor) and (x >= min-pxcor) and (y <= max-pycor) and (y >= min-pycor)
+  [
+    set f true
   ]
-
-end
-
-to assign-figures
-  ask figures [
-    let assignment one-of domain
-    while [count turtles-on patch (item 0 assignment) (item 1 assignment) >= 1]
-    [
-       set assignment one-of domain
-    ]
-    move-to-cell assignment
+  let p patch x y
+  if (p != nobody) [
+    if ([pcolor] of patch x y = white)
+  [
+    set f false
   ]
-end
-
-to move-to-cell [a]
-  setxy (item 0 a) (item 1 a)
-
-end
-
-to filtering
-  foreach (sort edge-neighbors)[
-    [a] -> revise a
   ]
-end
-
-to go-filtering
-  ask figures [
-    filtering
-  ]
-  let unused-figures figures with [(not step-performed?) and (length domain > 0)]
-  if count unused-figures = 0 [stop]
-  ask one-of unused-figures [
-    move-to-cell one-of domain
-    set step-performed? True
-    update-possible-steps
-  ]
-end
-
-to revise [other-figure]
-  if step-performed? [
-    ask other-figure [
-      if [shape] of myself != shape [
-        set domain complement domain (get-possible-steps (list ([xcor] of myself) ([ycor] of myself)) shape)
-      ]
-      set domain complement domain ([possible-steps] of myself)
-    ]
-  ]
-end
-
-to-report complement [A B]
-  report (filter [x -> not member? x B] A)
-end
-
-to-report constaint-violations?
-  let violated-links links with [
-    member? (list ([xcor] of end2) ([ycor] of end2)) ([possible-steps] of end1) or
-    member? (list ([xcor] of end1) ([ycor] of end1)) ([possible-steps] of end2)
-  ]
-  report any? violated-links
-end
-
-to update-possible-steps
-  set possible-steps get-possible-steps (list xcor ycor) shape
-end
-
-to-report get-possible-steps [pos sh]
-  let x (first pos)
-  let y (last pos)
-  let steps []
-  set steps fput (list x y) steps
-  if sh = "chess bishop" [
-    let i 1
-    while [(y + i <= max-y) and (x + i <= max-x)] [
-      set steps fput (list (x + i) (y + i)) steps
-      set i i + 1
-    ]
-    set i 1
-    while [(y - i > 0) and (x - i > 0)] [
-      set steps fput (list (x - i) (y - i)) steps
-      set i i + 1
-    ]
-    set i 1
-    while [(y + i <= max-y) and (x - i > 0)] [
-      set steps fput (list (x - i) (y + i)) steps
-      set i i + 1
-    ]
-    set i 1
-    while [(y - i > 0) and (x + i <= max-x)] [
-      set steps fput (list (x + i) (y - i)) steps
-      set i i + 1
-    ]
-  ]
-  if sh = "chess knight" [
-    if y + 2 <= max-y [
-      if x < max-x [
-        set steps fput (list (x + 1) (y + 2)) steps
-      ]
-      if x > 1 [
-        set steps fput (list (x - 1) (y + 2)) steps
-      ]
-    ]
-    if y - 2 >= 1 [
-      if x < max-x [
-        set steps fput (list (x + 1) (y - 2)) steps
-      ]
-      if x > 1 [
-        set steps fput (list (x - 1) (y - 2)) steps
-      ]
-    ]
-    if x + 2 <= max-x [
-      if y < max-y [
-        set steps fput (list (x + 2) (y + 1)) steps
-      ]
-      if y > 1 [
-        set steps fput (list (x + 2) (y - 1)) steps
-      ]
-    ]
-    if x - 2 >= 1 [
-      if y < max-y [
-        set steps fput (list (x - 2) (y + 1)) steps
-      ]
-      if y > 1 [
-        set steps fput (list (x - 2) (y - 1)) steps
-      ]
-    ]
-  ]
-  report steps
+  report f
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-232
+210
 10
-600
-379
+528
+251
 -1
 -1
-30.0
+77.6
 1
 10
 1
 1
 1
 0
-1
-1
-1
 0
-11
 0
-11
+1
+-2
+1
+-1
+1
 0
 0
 1
@@ -270,29 +124,12 @@ ticks
 30.0
 
 BUTTON
-78
-127
-144
-160
-NIL
-setup\n
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
+28
+19
+101
 52
-270
-175
-303
 NIL
-assign-figures
+setup
 NIL
 1
 T
@@ -302,134 +139,14 @@ NIL
 NIL
 NIL
 1
-
-SLIDER
-36
-171
-208
-204
-max-x
-max-x
-0
-10
-10.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-39
-222
-211
-255
-max-y
-max-y
-0
-10
-10.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-716
-74
-888
-107
-queens
-queens
-0
-10
-0.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-720
-136
-892
-169
-kings
-kings
-0
-10
-0.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-715
-185
-887
-218
-rooks
-rooks
-0
-10
-0.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-717
-236
-889
-269
-knights
-knights
-0
-10
-10.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-720
-288
-892
-321
-b-bishops
-b-bishops
-0
-10
-10.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-724
-340
-896
-373
-w-bishops
-w-bishops
-0
-10
-10.0
-1
-1
-NIL
-HORIZONTAL
 
 BUTTON
-70
-326
-162
-359
+28
+61
+100
+94
 NIL
-go-filtering
+go
 NIL
 1
 T
@@ -439,6 +156,101 @@ NIL
 NIL
 NIL
 1
+
+INPUTBOX
+29
+131
+133
+191
+green-reward
+10.0
+1
+0
+Number
+
+INPUTBOX
+30
+206
+135
+266
+red-reward
+-10.0
+1
+0
+Number
+
+INPUTBOX
+31
+278
+134
+338
+black-reward
+-0.5
+1
+0
+Number
+
+BUTTON
+344
+321
+414
+354
+NIL
+to-up
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+429
+371
+514
+404
+NIL
+to-right
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+261
+370
+335
+403
+NIL
+to-left
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+MONITOR
+578
+53
+689
+98
+NIL
+current-utility
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -532,107 +344,6 @@ Circle -16777216 true false 30 180 90
 Polygon -16777216 true false 162 80 132 78 134 135 209 135 194 105 189 96 180 89
 Circle -7500403 true true 47 195 58
 Circle -7500403 true true 195 195 58
-
-chess bishop
-false
-0
-Circle -7500403 true true 135 35 30
-Circle -16777216 false false 135 35 30
-Rectangle -7500403 true true 90 255 210 300
-Line -16777216 false 75 255 225 255
-Rectangle -16777216 false false 90 255 210 300
-Polygon -7500403 true true 105 255 120 165 180 165 195 255
-Polygon -16777216 false false 105 255 120 165 180 165 195 255
-Rectangle -7500403 true true 105 165 195 150
-Rectangle -16777216 false false 105 150 195 165
-Line -16777216 false 137 59 162 59
-Polygon -7500403 true true 135 60 120 75 120 105 120 120 105 120 105 90 90 105 90 120 90 135 105 150 195 150 210 135 210 120 210 105 195 90 165 60
-Polygon -16777216 false false 135 60 120 75 120 120 105 120 105 90 90 105 90 135 105 150 195 150 210 135 210 105 165 60
-
-chess king
-false
-0
-Polygon -7500403 true true 105 255 120 90 180 90 195 255
-Polygon -16777216 false false 105 255 120 90 180 90 195 255
-Polygon -7500403 true true 120 85 105 40 195 40 180 85
-Polygon -16777216 false false 119 85 104 40 194 40 179 85
-Rectangle -7500403 true true 105 105 195 75
-Rectangle -16777216 false false 105 75 195 105
-Rectangle -7500403 true true 90 255 210 300
-Line -16777216 false 75 255 225 255
-Rectangle -16777216 false false 90 255 210 300
-Rectangle -7500403 true true 165 23 134 13
-Rectangle -7500403 true true 144 0 154 44
-Polygon -16777216 false false 153 0 144 0 144 13 133 13 133 22 144 22 144 41 154 41 154 22 165 22 165 12 153 12
-
-chess knight
-false
-0
-Line -16777216 false 75 255 225 255
-Polygon -7500403 true true 90 255 60 255 60 225 75 180 75 165 60 135 45 90 60 75 60 45 90 30 120 30 135 45 240 60 255 75 255 90 255 105 240 120 225 105 180 120 210 150 225 195 225 210 210 255
-Polygon -16777216 false false 210 255 60 255 60 225 75 180 75 165 60 135 45 90 60 75 60 45 90 30 120 30 135 45 240 60 255 75 255 90 255 105 240 120 225 105 180 120 210 150 225 195 225 210
-Line -16777216 false 255 90 240 90
-Circle -16777216 true false 134 63 24
-Line -16777216 false 103 34 108 45
-Line -16777216 false 80 41 88 49
-Line -16777216 false 61 53 70 58
-Line -16777216 false 64 75 79 75
-Line -16777216 false 53 100 67 98
-Line -16777216 false 63 126 69 123
-Line -16777216 false 71 148 77 145
-Rectangle -7500403 true true 90 255 210 300
-Rectangle -16777216 false false 90 255 210 300
-
-chess pawn
-false
-0
-Circle -7500403 true true 105 65 90
-Circle -16777216 false false 105 65 90
-Rectangle -7500403 true true 90 255 210 300
-Line -16777216 false 75 255 225 255
-Rectangle -16777216 false false 90 255 210 300
-Polygon -7500403 true true 105 255 120 165 180 165 195 255
-Polygon -16777216 false false 105 255 120 165 180 165 195 255
-Rectangle -7500403 true true 105 165 195 150
-Rectangle -16777216 false false 105 150 195 165
-
-chess queen
-false
-0
-Circle -7500403 true true 140 11 20
-Circle -16777216 false false 139 11 20
-Circle -7500403 true true 120 22 60
-Circle -16777216 false false 119 20 60
-Rectangle -7500403 true true 90 255 210 300
-Line -16777216 false 75 255 225 255
-Rectangle -16777216 false false 90 255 210 300
-Polygon -7500403 true true 105 255 120 90 180 90 195 255
-Polygon -16777216 false false 105 255 120 90 180 90 195 255
-Rectangle -7500403 true true 105 105 195 75
-Rectangle -16777216 false false 105 75 195 105
-Polygon -7500403 true true 120 75 105 45 195 45 180 75
-Polygon -16777216 false false 120 75 105 45 195 45 180 75
-Circle -7500403 true true 180 35 20
-Circle -16777216 false false 180 35 20
-Circle -7500403 true true 140 35 20
-Circle -16777216 false false 140 35 20
-Circle -7500403 true true 100 35 20
-Circle -16777216 false false 99 35 20
-Line -16777216 false 105 90 195 90
-
-chess rook
-false
-0
-Rectangle -7500403 true true 90 255 210 300
-Line -16777216 false 75 255 225 255
-Rectangle -16777216 false false 90 255 210 300
-Polygon -7500403 true true 90 255 105 105 195 105 210 255
-Polygon -16777216 false false 90 255 105 105 195 105 210 255
-Rectangle -7500403 true true 75 90 120 60
-Rectangle -7500403 true true 75 84 225 105
-Rectangle -7500403 true true 135 90 165 60
-Rectangle -7500403 true true 180 90 225 60
-Polygon -16777216 false false 90 105 75 105 75 60 120 60 120 84 135 84 135 60 165 60 165 84 179 84 180 60 225 60 225 105
 
 circle
 false

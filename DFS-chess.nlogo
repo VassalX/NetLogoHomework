@@ -1,20 +1,7 @@
-extensions [table] ; розширення хеш - таблиці
-
 breed [figures figure]
-
 undirected-link-breed [edges edge]
 
-figures-own [
-  domain
-  possible-steps
-  step-performed?
-  message-queue  ;; список вхідних повідомлень у форматі [тип-повідомлення текст-повідомлення]
-  lower-naybors  ;; список сусідів з меншим пріоритетом
-  naybors        ;; розширений список сусідів
-  local-view     ;; відображення виду (номер-агента - колір)
-  no-goods       ;; список пар (агент колір), які є обмеженнями
-]
-
+figures-own [domain possible-steps ]
 edges-own [weight]
 
 globals [all-positions x-positions y-positions]
@@ -28,57 +15,17 @@ to setup
   set-positions
   draw-board
   create-figures queens [
-    setxy 0 0
-    set color white
-    set domain all-positions
     set shape "chess queen"
-    set step-performed? false
-    set possible-steps []
-  ]
-  create-figures kings [
-    setxy 1 0
-    set color white
-    set domain all-positions
-    set shape "chess king"
-    set step-performed? false
-    set possible-steps []
-  ]
-  create-figures rooks [
-    setxy 2 0
-    set color white
-    set domain all-positions
-    set shape "chess king"
-    set step-performed? false
-    set possible-steps []
+
   ]
 
   create-figures knights [
-    setxy 3 0
-    set color white
-    set domain all-positions
     set shape "chess knight"
-    set step-performed? false
-    set possible-steps []
-  ]
-   create-figures w-bishops [
-    setxy 4 0
-    set color white
-    set domain w-bishops-positions
-    set shape "chess bishop"
-    set step-performed? false
-    set possible-steps []
-  ]
-   create-figures b-bishops [
-    setxy 5 0
-    set color white
-    set domain b-bishops-positions
-    set shape "chess bishop"
-    set step-performed? false
-    set possible-steps []
   ]
 
 
   ask figures [
+    reset-figure
     create-edges-with other figures
   ]
   ask edges [
@@ -89,14 +36,6 @@ to setup
     set label who
   ]
 
-end
-
-to-report w-bishops-positions
-  report filter [a -> ((first a) mod 2) != ((last a) mod 2)] all-positions
-end
-
-to-report b-bishops-positions
-  report filter [a -> ((first a) mod 2) = ((last a) mod 2)] all-positions
 end
 
 to set-positions
@@ -142,259 +81,63 @@ end
 
 to move-to-cell [a]
   setxy (item 0 a) (item 1 a)
-
 end
 
-; ABT
-
-; визначення необхідних для алгоритму АБТ структур і змінних
-to setup-abt
-  ; призначаємо випадково кольори, визначаємо множини сусідів
-  assign-figures
-  ask figures [
-    set message-queue []
-    set lower-naybors []
-    set local-view table:make
-    set naybors sort link-neighbors
-    update-possible-steps
-    let i who
-    ; вибірка сусідів з нижчим пріоритетом
-    foreach naybors [
-      [a] ->
-      let w ([who] of a)
-      if (w > i) [
-        set lower-naybors fput a lower-naybors
-      ]
-    ]
-    ; встановлення початкових обмежень
-    set no-goods []
-    foreach domain [
-      [pos] ->
-      set-possible-steps pos shape
-      foreach naybors [
-        [a] ->
-        let w ([who] of a)
-        set no-goods sentence no-goods map [
-          [b] ->
-          normalize-nogood list (list who pos) (list w b) ] possible-steps
-        ]
-      ]
-    foreach naybors [
-      [a] ->
-      if not ([shape] of a = shape) [
-        let w ([who] of a)
-        foreach [domain] of a [
-          [pos] ->
-          set-possible-steps pos ([shape] of a)
-          set no-goods sentence no-goods map [
-            [b] ->
-            normalize-nogood list (list w pos) (list who b) ] possible-steps
-          ]
-        ]
-      ]
-    update-possible-steps
-   ]
-  ; розсилання повідомлень ок? зі своїм кольором сусідам з нижчим пріоритетом
-    ask figures [send-out-new-value]
+to reset-figure
+  if shape = "chess knight" [
+    setxy 3 0
+    set color white
+    set domain all-positions
+    set possible-steps []
+  ]
+  if shape = "chess queen" [
+    setxy 0 0
+    set color white
+    set domain all-positions
+    set possible-steps []
+  ]
 end
 
-to go-abt
-  tick
-  let important-turtles turtles with [not empty? message-queue]
-  ifelse (count important-turtles > 0) [
-    ask important-turtles [handle-message]
+
+to depth-first-search
+  ifelse (dfs (turtle 0)) [
+    show "See the positions"
   ][
-    ifelse (not constraint-violations?)[
-      show "SOLUTION FOUND"
-    ][
-      show "NO MORE MESSAGES. NO SOLUTION"
-    ]
-    stop
+    show "No position possible"
   ]
 end
 
-to-report bad-links
-  report links with [
-    (list ([xcor] of end2) ([ycor] of end2)) = (list ([xcor] of end1) ([ycor] of end1)) or
-    member? (list ([xcor] of end2) ([ycor] of end2)) ([possible-steps] of end1) or
-    member? (list ([xcor] of end1) ([ycor] of end1)) ([possible-steps] of end2)
+to-report dfs [n]
+  let i [who] of n
+  foreach all-positions [
+    [a] ->
+    ask n [
+      move-to-cell a
+      update-possible-steps
+    ]
+    if (not constraint-violations?)[
+      if (max [who] of figures = i)[
+      report true
+      ]
+      if (dfs (turtle (i + 1)))[
+      report true
+      ]
+    ]
   ]
+  ask n [reset-figure]
+  report false
+end
+
+to-report complement [A B]
+  report (filter [x -> not member? x B] A)
 end
 
 to-report constraint-violations?
-  report any? bad-links
-end
-
-to-report normalize-nogood [nogood]
-  ;; Сортування обмежень для виключення дублікатів
-  report sort-by [ [a b] -> (first a) < (first b) ] nogood
-end
-
-to send-out-new-value
-  ;; Надсилання ок? сусідам з нижчим пріоритетом
-  let my-message list "ok" (list who (list xcor ycor))
-  let i who
-  foreach lower-naybors [ [a] ->
-    ask a [set message-queue (lput my-message message-queue)]
+  let violated-links links with [
+    member? (list ([xcor] of end2) ([ycor] of end2)) ([possible-steps] of end1) or
+    member? (list ([xcor] of end1) ([ycor] of end1)) ([possible-steps] of end2)
   ]
-end
-
-to handle-message
- ; обробка повідомлень агентами
-
-  if not empty? message-queue [
-    let message first message-queue
-    set message-queue but-first message-queue
-    let message-type first message
-    let message-value last message
-
-    ifelse message-type = "ok" [
-      let someone first message-value
-      let val last message-value
-      handle-ok someone val
-    ][
-      ifelse message-type = "nogood" [
-        handle-nogood message-value
-      ][
-        handle-add-neighbor message-value
-      ]
-    ]
-  ]
-end
-
-; обробка повідомлень типу ок?
-to handle-ok [someone val]
-  table:put local-view someone val
-  check-local-view
-end
-
-; обробка повідомлень типу nogood
-to handle-nogood [nogood]
- if(not member? nogood no-goods) [
-    set no-goods fput nogood no-goods
-    ;; for each new neighbor
-    foreach (filter [
-      [a] ->
-      not member? (figure first a) naybors ] nogood) [
-      [b] ->
-      let new-naybor turtle (first b)
-      set naybors fput new-naybor naybors
-      table:put local-view (first b) (last b)
-      let message (list "new-neighbor" who)
-      ask new-naybor [
-        set message-queue lput message message-queue
-      ]
-    ]
-    foreach naybors [
-      [a] ->
-      let w ([who] of a)
-      if (w > who) and (not member? a lower-naybors) [
-
-        set lower-naybors fput a lower-naybors
-      ]
-      ]
-
-    check-local-view
-  ]
-
-end
-
-; обробка повідомлень додати нового сусіда
-to handle-add-neighbor [someone]
- if (not (member? (turtle someone) naybors)) [
-    set naybors fput turtle someone naybors
-    foreach naybors [
-      [a] ->
-      let w ([who] of a)
-      if (w > who) [
-         if (w > who) and (not member? a lower-naybors) [
-        set lower-naybors fput a lower-naybors
-         ]
-      ]
-    ]
-   let message (list "ok" (list who (list xcor ycor)))
-    ask figure someone [
-      set message-queue lput message message-queue
-    ]
-  ]
-
-end
-
-; перевірка сумісності свого кольору множині поточних nogoods
-to check-local-view
-  if not can-i-be? (list xcor ycor) [
-
-     let try-these filter [ [a] ->
-      not (a = (list xcor ycor)) ] domain
-    let can-be-something-else false
-    while [not empty? try-these] [
-      let try-this first try-these
-      set try-these but-first try-these
-
-      if can-i-be? try-this [
-        set try-these [] ;; break loop
-
-        move-to-cell try-this
-
-        update-possible-steps
-        set can-be-something-else true
-        send-out-new-value
-      ]
-    ]
-    if not can-be-something-else [
-      backtrack
-
-    ]
-  ]
-
-end
-
-to-report can-i-be? [val]
-  table:put local-view who val
-  foreach no-goods [
-    [a] ->
-    if (violates? local-view a) [
-      table:remove local-view who
-      report false
-    ]
-  ]
-  table:remove local-view who
-  report true
-end
-
-;перевірка порушень
-to-report violates? [assignments constraint]
-  foreach constraint [
-    [a] ->
-    if not (table:has-key? assignments (first a) and (table:get assignments first a) = (last a)) [report false]
-  ]
-  report true
-end
-
-; процедура відкату
-to backtrack
-  let no-good normalize-nogood find-new-nogood
-  ifelse(not member? no-good no-goods) [
-    if ([] = no-good) [
-      show "EMPTY NO-GOOD FOUND - NO SOLUTION"
-      stop
-    ]
-    set no-goods fput no-good no-goods
-
-    let index []
-
-    foreach no-good [[a] ->
-      set index fput (first a) index]
-
-    ask (figure max index) [
-      set message-queue lput (list "nogood" no-good) message-queue
-    ]
-  ] [ show "NOGOOD"]
-
-end
-
-to-report find-new-nogood
-  report table:to-list local-view
+  report any? violated-links
 end
 
 to update-possible-steps
@@ -406,7 +149,7 @@ to-report get-possible-steps [pos sh]
   let y (last pos)
   let steps []
   set steps fput (list x y) steps
-  if sh = "chess bishop" [
+  if sh = "chess queen" [
     let i 1
     while [(y + i <= max-y) and (x + i <= max-x)] [
       set steps fput (list (x + i) (y + i)) steps
@@ -427,6 +170,21 @@ to-report get-possible-steps [pos sh]
       set steps fput (list (x + i) (y - i)) steps
       set i i + 1
     ]
+    set i 1
+    while [i <= max-y] [
+      if i != y [
+        set steps fput (list x i) steps
+      ]
+      set i i + 1
+    ]
+    set i 1
+    while [i <= max-x] [
+      if i != x [
+        set steps fput (list i y) steps
+      ]
+      set i i + 1
+    ]
+
   ]
   if sh = "chess knight" [
     if y + 2 <= max-y [
@@ -464,10 +222,6 @@ to-report get-possible-steps [pos sh]
   ]
   report steps
 end
-
-to set-possible-steps [pos sh]
-  set possible-steps get-possible-steps pos sh
-end
 @#$#@#$#@
 GRAPHICS-WINDOW
 232
@@ -497,10 +251,10 @@ ticks
 30.0
 
 BUTTON
-38
-115
-104
-148
+41
+158
+107
+191
 NIL
 setup\n
 NIL
@@ -514,10 +268,10 @@ NIL
 1
 
 BUTTON
-38
-270
-161
-303
+39
+199
+162
+232
 NIL
 assign-figures
 NIL
@@ -531,15 +285,15 @@ NIL
 1
 
 SLIDER
-37
-166
-209
-199
+38
+72
+210
+105
 max-x
 max-x
 0
 10
-4.0
+5.0
 1
 1
 NIL
@@ -547,116 +301,56 @@ HORIZONTAL
 
 SLIDER
 39
-222
+117
 211
-255
+150
 max-y
 max-y
 0
 10
-4.0
+5.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-716
-74
-888
-107
+613
+14
+785
+47
 queens
 queens
 0
 10
-0.0
+5.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-717
-115
-889
-148
-kings
-kings
-0
-10
-0.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-717
-158
-889
-191
-rooks
-rooks
-0
-10
-0.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-714
-232
-886
-265
+613
+61
+785
+94
 knights
 knights
 0
-20
-8.0
+10
+1.0
 1
 1
 NIL
 HORIZONTAL
 
-SLIDER
-714
+BUTTON
+40
+245
+172
 278
-886
-311
-b-bishops
-b-bishops
-0
-10
-0.0
-1
-1
 NIL
-HORIZONTAL
-
-SLIDER
-715
-325
-887
-358
-w-bishops
-w-bishops
-0
-10
-0.0
-1
-1
-NIL
-HORIZONTAL
-
-BUTTON
-38
-318
-124
-351
-NIL
-setup-abt
+depth-first-search
 NIL
 1
 T
@@ -666,51 +360,6 @@ NIL
 NIL
 NIL
 1
-
-BUTTON
-38
-367
-107
-400
-NIL
-go-abt
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-120
-368
-189
-401
-NIL
-go-abt
-T
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-MONITOR
-718
-9
-814
-54
-NIL
-count bad-links
-17
-1
-11
 
 @#$#@#$#@
 ## WHAT IS IT?

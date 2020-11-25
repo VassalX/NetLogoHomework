@@ -148,7 +148,7 @@ num-nodes
 num-nodes
 0
 100
-14.0
+6.0
 1
 1
 NIL
@@ -163,7 +163,7 @@ num-edges
 num-edges
 0
 100
-24.0
+12.0
 1
 1
 NIL

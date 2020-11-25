@@ -1,268 +1,250 @@
-breed [figures figure]
-undirected-link-breed [edges edge]
+extensions [ table ]
 
-figures-own [domain possible-steps step-performed?]
-edges-own [weight]
-
-globals [all-positions x-positions y-positions]
+globals [
+  u
+  actions
+ ]
 
 to setup
   clear-all
   reset-ticks
-  ask patches[
-    set pcolor grey
-  ]
-  set-positions
-  draw-board
-  create-figures queens [
-    setxy 0 0
-    set color white
-    set domain all-positions
-    set shape "chess queen"
-    set step-performed? false
-    set possible-steps []
-  ]
-  create-figures kings [
-    setxy 1 0
-    set color white
-    set domain all-positions
-    set shape "chess king"
-    set step-performed? false
-    set possible-steps []
-  ]
-  create-figures rooks [
-    setxy 2 0
-    set color white
-    set domain all-positions
-    set shape "chess king"
-    set step-performed? false
-    set possible-steps []
-  ]
+  ask patch -1 0 [set pcolor white
+  set plabel "wall  "
+  set plabel-color black]
+  ask patch 1 1 [set pcolor green
+  set plabel "+ 10  "
+  set plabel-color black]
+  ask patch 1 0 [set pcolor red
+  set plabel " - 10  "
+  set plabel-color black]
+  create-turtles 1 [
+    set color blue
+    set size 0.7
+    set shape "person"
+    setxy -2 -1]
 
-  create-figures knights [
-    setxy 3 0
-    set color white
-    set domain all-positions
-    set shape "chess knight"
-    set step-performed? false
-    set possible-steps []
-  ]
-   create-figures w-bishops [
-    setxy 4 0
-    set color white
-    set domain w-bishops-positions
-    set shape "chess bishop"
-    set step-performed? false
-    set possible-steps []
-  ]
-   create-figures b-bishops [
-    setxy 5 0
-    set color white
-    set domain b-bishops-positions
-    set shape "chess bishop"
-    set step-performed? false
-    set possible-steps []
-  ]
+  set actions ["up" "down" "right" "left" "none"]
 
+  if abs(main-action-prob + other-actions-prob - 1) > 0.000000001
+  [ error "The sum of all action probabilities should be equals to 1!" ]
 
-  ask figures [
-    create-edges-with other figures
+  set u table:make
+  ask patches [
+    if pcolor = red [put-utility pxcor pycor red-reward]
+    if pcolor = green [put-utility pxcor pycor green-reward]
   ]
-  ask edges [
-    hide-link
-    set weight 1
-  ]
-  ask figures [
-    set label who
-  ]
-
 end
 
-to-report w-bishops-positions
-  report filter [a -> ((first a) mod 2) != ((last a) mod 2)] all-positions
+to go
+  tick
+  ask turtles [
+    let best-action first get-best-action
+    run-action best-action]
+  wait 1
 end
 
-to-report b-bishops-positions
-  report filter [a -> ((first a) mod 2) = ((last a) mod 2)] all-positions
+to-report check-constraints [x y]
+  let f false
+
+  if (x <= max-pxcor) and (x >= min-pxcor) and (y <= max-pycor) and (y >= min-pycor)
+  [
+    set f true
+  ]
+  let p patch x y
+  if (p != nobody) [
+    if ([pcolor] of patch x y = white)
+  [
+    set f false
+  ]
+  ]
+  report f
 end
 
-to set-positions
-  set all-positions []
-  set x-positions n-values max-x [[i] -> (i + 1)]
-  set y-positions n-values max-y [[i] -> (i + 1)]
+to-report get-actions-and-utilities
+  let x xcor
+  let y ycor
+  let best-action 0
+  let best-utility -10000
+  let possible-actions actions
 
-  foreach x-positions [
-    [i] ->
-    foreach y-positions [
-      [j] ->
-      set all-positions fput list (i) (j) all-positions
+  let action-and-utilities table:make
+  foreach possible-actions [
+    [a] ->
+    run-action-deterministic a  ; take action
+    let utility get-utility xcor ycor
+    if (utility > best-utility)[
+      set best-action a
+      set best-utility utility
     ]
+    setxy x y
+    table:put action-and-utilities a utility
   ]
+  report action-and-utilities
 end
 
-to draw-board
-  foreach all-positions [
-    [i] ->
-    let x item 0 i
-    let y item 1 i
-    ask patch x y [
-      ifelse (((x mod 2) = 0) xor ((y mod 2) = 0)) [
-        set pcolor 8
-      ][
-      set pcolor brown
+to run-action [ action ]
+  let current-action 0
+  ifelse random-float 1 < main-action-prob [
+   set current-action action
+  ][
+   set current-action one-of (remove action actions)
+   ]
+
+   if ((current-action = "left") and (check-constraints (pxcor - 1) pycor) = true)
+  [
+      setxy pxcor - 1 pycor
+   ]
+  if ((current-action = "right") and (check-constraints (pxcor + 1) pycor))
+  [
+      setxy pxcor + 1 pycor
+   ]
+  if ((current-action = "up") and (check-constraints pxcor  (pycor + 1)))
+  [
+      setxy pxcor pycor + 1
+   ]
+  if ((current-action = "down") and (check-constraints pxcor  (pycor - 1)))
+  [
+      setxy pxcor pycor - 1
+   ]
+  if ((current-action = "none"))
+  [
+      setxy pxcor pycor
+   ]
+end
+
+to run-action-deterministic [ action ]
+  let current-action action
+
+   if ((current-action = "left") and (check-constraints (pxcor - 1) pycor) = true)
+  [
+      setxy pxcor - 1 pycor
+   ]
+  if ((current-action = "right") and (check-constraints (pxcor + 1) pycor))
+  [
+      setxy pxcor + 1 pycor
+   ]
+  if ((current-action = "up") and (check-constraints pxcor  (pycor + 1)))
+  [
+      setxy pxcor pycor + 1
+   ]
+  if ((current-action = "down") and (check-constraints pxcor  (pycor - 1)))
+  [
+      setxy pxcor pycor - 1
+   ]
+  if ((current-action = "none"))
+  [
+      setxy pxcor pycor
+   ]
+end
+
+to-report get-reward
+  if (pcolor = red) [report red-reward]
+  if (pcolor = green) [report green-reward]
+  if (pcolor = black) [report black-reward]
+  if (pcolor = white) [report -100]
+
+end
+
+to value-iteration
+  let delta 10000
+  let my-turtle 0
+  create-turtles 1 [
+    set my-turtle self
+    set hidden? true
+  ]
+
+  while [delta > epsilon * (1 - gamma) / gamma][
+    set delta 0
+    ask patches with [pcolor = black][
+      foreach actions [
+        [a] ->
+        let x pxcor
+        let y pycor
+        let best-action 0
+        ask my-turtle [
+          setxy x y
+          let best-utility item 1 get-best-action
+          let current-utility get-utility x y
+          let new-utility (get-reward + gamma * best-utility)
+          put-utility x y new-utility
+          if (abs (current-utility - new-utility) > delta)[
+            set delta abs (current-utility - new-utility)
+          ]
+          set plabel (precision current-utility 1)
+        ]
       ]
     ]
+    plot delta
   ]
-
+  ask my-turtle [die]
 end
 
-to assign-figures
-  ask figures [
-    let assignment one-of domain
-    while [count turtles-on patch (item 0 assignment) (item 1 assignment) >= 1]
-    [
-       set assignment one-of domain
+to-report get-best-action
+  let x xcor
+  let y ycor
+  let best-action 0
+  let best-utility -10000
+  foreach actions [
+    [a] ->
+    run-action-deterministic a  ; take action
+    let utility-of-action get-utility xcor ycor * main-action-prob
+
+    foreach (remove a actions) [
+      [b] ->
+      setxy x y
+      run-action-deterministic b
+      set utility-of-action utility-of-action + (get-utility xcor ycor * (other-actions-prob / 4))
     ]
-    move-to-cell assignment
-  ]
+
+    if (utility-of-action > best-utility)[
+    set best-action a
+    set best-utility utility-of-action
+    ]
+    setxy x y
+   ]
+  report (list best-action best-utility)
 end
 
-to move-to-cell [a]
-  setxy (item 0 a) (item 1 a)
-
+to take-best-action
+  let best-action first get-best-action
+  run-action best-action
 end
 
-to filtering
-  foreach (sort edge-neighbors)[
-    [a] -> revise a
-  ]
+to put-utility [x y utility]
+  let state (list x y)
+  table:put u state utility
 end
 
-to go-filtering
-  ask figures [
-    filtering
+to-report get-utility [x y]
+  let state (list x y)
+  if (table:has-key? u state) [
+    report table:get u (list x y)
   ]
-  let unused-figures figures with [(not step-performed?) and (length domain > 0)]
-  if count unused-figures = 0 [stop]
-  ask one-of unused-figures [
-    move-to-cell one-of domain
-    set step-performed? True
-    update-possible-steps
-  ]
-end
-
-to revise [other-figure]
-  if step-performed? [
-    ask other-figure [
-      if [shape] of myself != shape [
-        set domain complement domain (get-possible-steps (list ([xcor] of myself) ([ycor] of myself)) shape)
-      ]
-      set domain complement domain ([possible-steps] of myself)
-    ]
-  ]
-end
-
-to-report complement [A B]
-  report (filter [x -> not member? x B] A)
-end
-
-to-report constaint-violations?
-  let violated-links links with [
-    member? (list ([xcor] of end2) ([ycor] of end2)) ([possible-steps] of end1) or
-    member? (list ([xcor] of end1) ([ycor] of end1)) ([possible-steps] of end2)
-  ]
-  report any? violated-links
-end
-
-to update-possible-steps
-  set possible-steps get-possible-steps (list xcor ycor) shape
-end
-
-to-report get-possible-steps [pos sh]
-  let x (first pos)
-  let y (last pos)
-  let steps []
-  set steps fput (list x y) steps
-  if sh = "chess bishop" [
-    let i 1
-    while [(y + i <= max-y) and (x + i <= max-x)] [
-      set steps fput (list (x + i) (y + i)) steps
-      set i i + 1
-    ]
-    set i 1
-    while [(y - i > 0) and (x - i > 0)] [
-      set steps fput (list (x - i) (y - i)) steps
-      set i i + 1
-    ]
-    set i 1
-    while [(y + i <= max-y) and (x - i > 0)] [
-      set steps fput (list (x - i) (y + i)) steps
-      set i i + 1
-    ]
-    set i 1
-    while [(y - i > 0) and (x + i <= max-x)] [
-      set steps fput (list (x + i) (y - i)) steps
-      set i i + 1
-    ]
-  ]
-  if sh = "chess knight" [
-    if y + 2 <= max-y [
-      if x < max-x [
-        set steps fput (list (x + 1) (y + 2)) steps
-      ]
-      if x > 1 [
-        set steps fput (list (x - 1) (y + 2)) steps
-      ]
-    ]
-    if y - 2 >= 1 [
-      if x < max-x [
-        set steps fput (list (x + 1) (y - 2)) steps
-      ]
-      if x > 1 [
-        set steps fput (list (x - 1) (y - 2)) steps
-      ]
-    ]
-    if x + 2 <= max-x [
-      if y < max-y [
-        set steps fput (list (x + 2) (y + 1)) steps
-      ]
-      if y > 1 [
-        set steps fput (list (x + 2) (y - 1)) steps
-      ]
-    ]
-    if x - 2 >= 1 [
-      if y < max-y [
-        set steps fput (list (x - 2) (y + 1)) steps
-      ]
-      if y > 1 [
-        set steps fput (list (x - 2) (y - 1)) steps
-      ]
-    ]
-  ]
-  report steps
+  put-utility x y 0
+  report 0
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-232
+268
 10
-600
-379
+736
+364
 -1
 -1
-30.0
+115.0
 1
 10
 1
 1
 1
 0
-1
-1
-1
 0
-11
 0
-11
+1
+-2
+1
+-1
+1
 0
 0
 1
@@ -270,12 +252,12 @@ ticks
 30.0
 
 BUTTON
-78
-127
-144
-160
+28
+34
+101
+67
 NIL
-setup\n
+setup
 NIL
 1
 T
@@ -287,12 +269,12 @@ NIL
 1
 
 BUTTON
-52
-270
-175
-303
+30
+72
+93
+105
 NIL
-assign-figures
+go
 NIL
 1
 T
@@ -303,133 +285,90 @@ NIL
 NIL
 1
 
-SLIDER
+INPUTBOX
 36
-171
-208
+142
+197
+202
+green-reward
+10.0
+1
+0
+Number
+
+INPUTBOX
+42
+427
+203
+487
+main-action-prob
+1.0
+1
+0
+Number
+
+INPUTBOX
+37
+359
+198
+419
+other-actions-prob
+0.3
+1
+0
+Number
+
+INPUTBOX
+43
+216
 204
-max-x
-max-x
+276
+red-reward
+-10.0
+1
 0
-10
-10.0
-1
-1
-NIL
-HORIZONTAL
+Number
 
-SLIDER
-39
-222
-211
-255
-max-y
-max-y
+INPUTBOX
+44
+283
+205
+343
+black-reward
+-1.0
+1
 0
-10
-10.0
-1
-1
-NIL
-HORIZONTAL
+Number
 
-SLIDER
-716
-74
-888
-107
-queens
-queens
+INPUTBOX
+821
+116
+982
+176
+epsilon
+0.05
+1
 0
-10
-0.0
-1
-1
-NIL
-HORIZONTAL
+Number
 
-SLIDER
-720
-136
-892
-169
-kings
-kings
+INPUTBOX
+821
+191
+982
+251
+gamma
+0.9
+1
 0
-10
-0.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-715
-185
-887
-218
-rooks
-rooks
-0
-10
-0.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-717
-236
-889
-269
-knights
-knights
-0
-10
-10.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-720
-288
-892
-321
-b-bishops
-b-bishops
-0
-10
-10.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-724
-340
-896
-373
-w-bishops
-w-bishops
-0
-10
-10.0
-1
-1
-NIL
-HORIZONTAL
+Number
 
 BUTTON
-70
-326
-162
-359
+813
+49
+967
+82
 NIL
-go-filtering
+value-iteration
 NIL
 1
 T
@@ -439,6 +378,24 @@ NIL
 NIL
 NIL
 1
+
+PLOT
+1038
+236
+1238
+386
+plot 1
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot delta"
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -532,107 +489,6 @@ Circle -16777216 true false 30 180 90
 Polygon -16777216 true false 162 80 132 78 134 135 209 135 194 105 189 96 180 89
 Circle -7500403 true true 47 195 58
 Circle -7500403 true true 195 195 58
-
-chess bishop
-false
-0
-Circle -7500403 true true 135 35 30
-Circle -16777216 false false 135 35 30
-Rectangle -7500403 true true 90 255 210 300
-Line -16777216 false 75 255 225 255
-Rectangle -16777216 false false 90 255 210 300
-Polygon -7500403 true true 105 255 120 165 180 165 195 255
-Polygon -16777216 false false 105 255 120 165 180 165 195 255
-Rectangle -7500403 true true 105 165 195 150
-Rectangle -16777216 false false 105 150 195 165
-Line -16777216 false 137 59 162 59
-Polygon -7500403 true true 135 60 120 75 120 105 120 120 105 120 105 90 90 105 90 120 90 135 105 150 195 150 210 135 210 120 210 105 195 90 165 60
-Polygon -16777216 false false 135 60 120 75 120 120 105 120 105 90 90 105 90 135 105 150 195 150 210 135 210 105 165 60
-
-chess king
-false
-0
-Polygon -7500403 true true 105 255 120 90 180 90 195 255
-Polygon -16777216 false false 105 255 120 90 180 90 195 255
-Polygon -7500403 true true 120 85 105 40 195 40 180 85
-Polygon -16777216 false false 119 85 104 40 194 40 179 85
-Rectangle -7500403 true true 105 105 195 75
-Rectangle -16777216 false false 105 75 195 105
-Rectangle -7500403 true true 90 255 210 300
-Line -16777216 false 75 255 225 255
-Rectangle -16777216 false false 90 255 210 300
-Rectangle -7500403 true true 165 23 134 13
-Rectangle -7500403 true true 144 0 154 44
-Polygon -16777216 false false 153 0 144 0 144 13 133 13 133 22 144 22 144 41 154 41 154 22 165 22 165 12 153 12
-
-chess knight
-false
-0
-Line -16777216 false 75 255 225 255
-Polygon -7500403 true true 90 255 60 255 60 225 75 180 75 165 60 135 45 90 60 75 60 45 90 30 120 30 135 45 240 60 255 75 255 90 255 105 240 120 225 105 180 120 210 150 225 195 225 210 210 255
-Polygon -16777216 false false 210 255 60 255 60 225 75 180 75 165 60 135 45 90 60 75 60 45 90 30 120 30 135 45 240 60 255 75 255 90 255 105 240 120 225 105 180 120 210 150 225 195 225 210
-Line -16777216 false 255 90 240 90
-Circle -16777216 true false 134 63 24
-Line -16777216 false 103 34 108 45
-Line -16777216 false 80 41 88 49
-Line -16777216 false 61 53 70 58
-Line -16777216 false 64 75 79 75
-Line -16777216 false 53 100 67 98
-Line -16777216 false 63 126 69 123
-Line -16777216 false 71 148 77 145
-Rectangle -7500403 true true 90 255 210 300
-Rectangle -16777216 false false 90 255 210 300
-
-chess pawn
-false
-0
-Circle -7500403 true true 105 65 90
-Circle -16777216 false false 105 65 90
-Rectangle -7500403 true true 90 255 210 300
-Line -16777216 false 75 255 225 255
-Rectangle -16777216 false false 90 255 210 300
-Polygon -7500403 true true 105 255 120 165 180 165 195 255
-Polygon -16777216 false false 105 255 120 165 180 165 195 255
-Rectangle -7500403 true true 105 165 195 150
-Rectangle -16777216 false false 105 150 195 165
-
-chess queen
-false
-0
-Circle -7500403 true true 140 11 20
-Circle -16777216 false false 139 11 20
-Circle -7500403 true true 120 22 60
-Circle -16777216 false false 119 20 60
-Rectangle -7500403 true true 90 255 210 300
-Line -16777216 false 75 255 225 255
-Rectangle -16777216 false false 90 255 210 300
-Polygon -7500403 true true 105 255 120 90 180 90 195 255
-Polygon -16777216 false false 105 255 120 90 180 90 195 255
-Rectangle -7500403 true true 105 105 195 75
-Rectangle -16777216 false false 105 75 195 105
-Polygon -7500403 true true 120 75 105 45 195 45 180 75
-Polygon -16777216 false false 120 75 105 45 195 45 180 75
-Circle -7500403 true true 180 35 20
-Circle -16777216 false false 180 35 20
-Circle -7500403 true true 140 35 20
-Circle -16777216 false false 140 35 20
-Circle -7500403 true true 100 35 20
-Circle -16777216 false false 99 35 20
-Line -16777216 false 105 90 195 90
-
-chess rook
-false
-0
-Rectangle -7500403 true true 90 255 210 300
-Line -16777216 false 75 255 225 255
-Rectangle -16777216 false false 90 255 210 300
-Polygon -7500403 true true 90 255 105 105 195 105 210 255
-Polygon -16777216 false false 90 255 105 105 195 105 210 255
-Rectangle -7500403 true true 75 90 120 60
-Rectangle -7500403 true true 75 84 225 105
-Rectangle -7500403 true true 135 90 165 60
-Rectangle -7500403 true true 180 90 225 60
-Polygon -16777216 false false 90 105 75 105 75 60 120 60 120 84 135 84 135 60 165 60 165 84 179 84 180 60 225 60 225 105
 
 circle
 false
