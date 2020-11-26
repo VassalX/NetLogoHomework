@@ -178,6 +178,7 @@ to-report get-reward
   if (pcolor = red) [report red-reward]
   if (pcolor = green) [report green-reward]
   if (pcolor = black) [report black-reward]
+  if (pcolor = sky) [report sky-reward]
   if (pcolor = white) [report -100]
 
 end
@@ -264,11 +265,11 @@ end
 GRAPHICS-WINDOW
 419
 37
-1117
-621
+787
+346
 -1
 -1
-115.0
+60.0
 1
 10
 1
@@ -339,7 +340,7 @@ INPUTBOX
 198
 536
 main-action-prob
-0.7
+0.9
 1
 0
 Number
@@ -350,7 +351,7 @@ INPUTBOX
 198
 468
 other-actions-prob
-0.3
+0.1
 1
 0
 Number
