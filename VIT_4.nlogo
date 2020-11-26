@@ -3,39 +3,76 @@ extensions [ table ]
 globals [
   u
   actions
+  walls-near-person
  ]
 
 to setup
   clear-all
   reset-ticks
-  ask patch -1 0 [set pcolor white
-  set plabel "wall  "
-  set plabel-color black]
-  ask patch 1 1 [set pcolor green
-  set plabel "+ 10  "
-  set plabel-color black]
-  ask patch 1 0 [set pcolor red
-  set plabel " - 10  "
-  set plabel-color black]
+
+  if num-walls + num-ice > (max-x * max-y - 3) [
+    error "Incorrect walls and ice"
+  ]
+
+  if abs(main-action-prob + other-actions-prob - 1) > 0.000000001
+  [ error "The sum of all action probabilities should be equals to 1!" ]
+
+  resize-world min-pxcor (max-x - 1) min-pycor (max-y - 1)
+
+  set actions ["up" "down" "right" "left" "none"]
+  set u table:make
+  set walls-near-person 0
+
   create-turtles 1 [
     set color blue
     set size 0.7
     set shape "person"
     setxy -2 -1]
 
-  set actions ["up" "down" "right" "left" "none"]
+  ask patch (max-x - 1) (max-y - 1) [
+    set pcolor green
+    set plabel green-reward
+    set plabel-color white
+  ]
 
-  if abs(main-action-prob + other-actions-prob - 1) > 0.000000001
-  [ error "The sum of all action probabilities should be equals to 1!" ]
+  ask patch (max-x - 1) (max-y - 2) [
+    set pcolor red
+    set plabel red-reward
+    set plabel-color white
+  ]
 
-  set u table:make
   ask patches [
     if pcolor = red [put-utility pxcor pycor red-reward]
     if pcolor = green [put-utility pxcor pycor green-reward]
   ]
+
+  let i num-walls
+  while [i > 0] [
+    ask one-of patches with [pcolor = black and not any? turtles-on self] [
+      set pcolor white
+      set plabel "wall"
+      set plabel-color black
+    ]
+    set i i - 1
+  ]
+  set i num-ice
+  while [i > 0] [
+    ask one-of patches with [pcolor = black and not any? turtles-on self] [
+      set pcolor sky
+      set plabel sky-reward
+      set plabel-color white
+    ]
+    set i i - 1
+  ]
 end
 
 to go
+   ask turtles [
+    if pcolor = green [
+      show "Victory!"
+      stop
+    ]
+  ]
   tick
   ask turtles [
     let best-action first get-best-action
@@ -225,10 +262,10 @@ to-report get-utility [x y]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-268
-10
-736
-364
+419
+37
+1117
+621
 -1
 -1
 115.0
@@ -242,9 +279,9 @@ GRAPHICS-WINDOW
 0
 1
 -2
-1
+3
 -1
-1
+3
 0
 0
 1
@@ -297,21 +334,21 @@ green-reward
 Number
 
 INPUTBOX
-42
-427
-203
-487
+37
+476
+198
+536
 main-action-prob
-1.0
+0.7
 1
 0
 Number
 
 INPUTBOX
 37
-359
+408
 198
-419
+468
 other-actions-prob
 0.3
 1
@@ -319,10 +356,10 @@ other-actions-prob
 Number
 
 INPUTBOX
-43
-216
-204
-276
+36
+213
+197
+273
 red-reward
 -10.0
 1
@@ -330,10 +367,10 @@ red-reward
 Number
 
 INPUTBOX
-44
-283
-205
-343
+37
+280
+198
+340
 black-reward
 -1.0
 1
@@ -341,10 +378,10 @@ black-reward
 Number
 
 INPUTBOX
-821
-116
-982
-176
+36
+541
+197
+601
 epsilon
 0.05
 1
@@ -352,10 +389,10 @@ epsilon
 Number
 
 INPUTBOX
-821
-191
-982
-251
+34
+614
+195
+674
 gamma
 0.9
 1
@@ -363,10 +400,10 @@ gamma
 Number
 
 BUTTON
-813
-49
-967
-82
+107
+35
+261
+68
 NIL
 value-iteration
 NIL
@@ -380,10 +417,10 @@ NIL
 1
 
 PLOT
-1038
-236
-1238
-386
+210
+322
+410
+472
 plot 1
 NIL
 NIL
@@ -396,6 +433,77 @@ false
 "" ""
 PENS
 "default" 1.0 0 -16777216 true "" "plot delta"
+
+SLIDER
+217
+144
+389
+177
+max-x
+max-x
+0
+10
+4.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+216
+187
+388
+220
+max-y
+max-y
+0
+10
+4.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+217
+228
+389
+261
+num-walls
+num-walls
+0
+10
+2.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+219
+269
+391
+302
+num-ice
+num-ice
+0
+10
+2.0
+1
+1
+NIL
+HORIZONTAL
+
+INPUTBOX
+37
+344
+192
+404
+sky-reward
+-1.0
+1
+0
+Number
 
 @#$#@#$#@
 ## WHAT IS IT?

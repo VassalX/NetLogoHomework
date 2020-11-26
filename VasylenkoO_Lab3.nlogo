@@ -286,23 +286,6 @@ NIL
 NIL
 1
 
-BUTTON
-52
-270
-175
-303
-NIL
-assign-figures
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 SLIDER
 36
 171

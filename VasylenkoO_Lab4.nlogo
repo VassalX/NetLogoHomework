@@ -1,5 +1,5 @@
 extensions [table]
-globals [u headings actions]
+globals [u headings actions best-probablity]
 
 to setup
   clear-all
@@ -26,6 +26,7 @@ to setup
   set headings [0 90 180 270]
   set actions ["fd 1" "lt 90" "rt 90"]
   set u table:make
+  set best-probablity 100
   create-turtles num [
     let p one-of patches with [pcolor = black]
     setxy [pxcor] of p [pycor] of p
@@ -35,13 +36,13 @@ to setup
 end
 
 to go
-  tick
+  if any? turtles with [pcolor = white] or all? turtles [pcolor = brown] [
+    stop
+  ]
   ask turtles [
     take-best-action
   ]
-  if all? turtles [pcolor = brown] [
-    stop
-  ]
+  tick
 end
 
 to put-utility [x y dir utility]
@@ -73,12 +74,14 @@ to value-iteration
         [h] -> let dir h
         let x pxcor
         let y pycor
-        let best-action 0
         ask my-turtle [
           setxy x y
           set heading dir
+          let best-action item 0 get-best-action
           let best-utility item 1 get-best-action
-          let current-utility get-utility x y dir
+          ;let current-utility get-utility x y dir
+          let current-utility (best-probablity / 100) * (get-utility x y dir)
+          set current-utility current-utility + (get-other-utility x y dir best-action)
           let new-utility (get-reward + gamma * best-utility)
           put-utility x y dir new-utility
           if (abs (current-utility - new-utility) > delta)[
@@ -88,9 +91,24 @@ to value-iteration
         ]
       ]
     ]
-    plot delta
+    ;show delta
   ]
   ask my-turtle [die]
+end
+
+to-report get-other-utility [x y dir a]
+  let other-probability ((1 - best-probablity / 100) / 2)
+  let b one-of (remove a actions)
+  run b
+  let other-utility (get-utility xcor ycor heading) * other-probability
+  let c one-of (remove b (remove a actions))
+  setxy x y
+  set heading dir
+  run c
+  set other-utility other-utility + (get-utility xcor ycor heading) * other-probability
+  setxy x y
+  set heading dir
+  report other-utility * (1 - best-probablity / 100)
 end
 
 to-report get-best-action
@@ -130,10 +148,10 @@ to take-best-action
 end
 
 to-report get-reward
-  if (pcolor = brown) [report 50]
-  if (pcolor = white) [report -200]
-  if (pcolor = black) [report -0.5]
-  if (pcolor = cyan) [report -1]
+  if (pcolor = brown) [report win-reward]
+  if (pcolor = white) [report wall-reward]
+  if (pcolor = black) [report black-reward]
+  if (pcolor = cyan) [report ice-reward]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -179,10 +197,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-63
-33
-126
-66
+46
+35
+109
+68
 NIL
 setup\n
 NIL
@@ -196,10 +214,10 @@ NIL
 1
 
 BUTTON
-63
-110
-126
-143
+46
+112
+109
+145
 NIL
 go
 NIL
@@ -236,17 +254,17 @@ gamma
 gamma
 0
 1
-0.95
-0.05
+0.99
+0.01
 1
 NIL
 HORIZONTAL
 
 BUTTON
-62
-69
-198
-102
+45
+71
+181
+104
 NIL
 value-iteration
 NIL
@@ -258,23 +276,6 @@ NIL
 NIL
 NIL
 1
-
-PLOT
-747
-369
-947
-519
-delta
-NIL
-NIL
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
 
 SLIDER
 739
@@ -322,10 +323,10 @@ NIL
 HORIZONTAL
 
 BUTTON
-139
-115
-202
-148
+122
+117
+185
+150
 NIL
 go
 T
@@ -337,6 +338,50 @@ NIL
 NIL
 NIL
 1
+
+INPUTBOX
+43
+160
+198
+220
+win-reward
+50.0
+1
+0
+Number
+
+INPUTBOX
+41
+227
+196
+287
+black-reward
+-0.5
+1
+0
+Number
+
+INPUTBOX
+43
+295
+198
+355
+wall-reward
+-200.0
+1
+0
+Number
+
+INPUTBOX
+45
+359
+200
+419
+ice-reward
+-50.0
+1
+0
+Number
 
 @#$#@#$#@
 ## WHAT IS IT?
