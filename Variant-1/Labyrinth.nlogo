@@ -1,66 +1,177 @@
-extensions [table]
-globals [u headings actions]
+extensions [ table ]
+
+globals [
+  u
+  actions
+  walls-near-person
+ ]
 
 to setup
   clear-all
   reset-ticks
-  ask patches [set plabel-color yellow]
-  ask patches with [
-    abs pxcor = max-pxcor or abs pycor = max-pycor]
-  [set pcolor white]
-  ask patches with [pxcor = max-pxcor and pycor = 0]
-  [set pcolor brown]
-  ask patches with [
-    abs pxcor < max-pxcor and abs pycor < max-pycor]
-  [
-    if-else random 100 < walls-probability[
-      set pcolor white
-    ][
-      if-else random 100 < rest-probability[
-        set pcolor green
-      ][
-        if-else random 100 < fire-probability[
-          set pcolor red
-        ][
-          set pcolor black
-        ]
-      ]
-    ]
+
+  if num-walls + num-fire + num-rest > (max-x * max-y - 2) [
+    error "Incorrect walls, fire and rest"
   ]
-  set headings [0 90 180 270]
-  set actions ["fd 1" "lt 90" "rt 90"]
+
+  resize-world min-pxcor (max-x - 1) min-pycor (max-y - 1)
+
+  set actions ["up" "down" "right" "left" "none"]
   set u table:make
-  create-turtles num [
-    let p one-of patches with [pcolor = black]
-    setxy [pxcor] of p [pycor] of p
+  set walls-near-person 0
+
+  create-turtles 1 [
     set color blue
-    set heading one-of headings
+    set size 0.7
+    set shape "person"
+    setxy -2 -1]
+
+  ask patch (max-x - 1) (max-y - 1) [
+    set pcolor green
+    set plabel green-reward
+    set plabel-color white
+    put-utility pxcor pycor green-reward
+  ]
+
+  let i num-walls
+  while [i > 0] [
+    ask one-of patches with [pcolor = black and not any? turtles-on self] [
+      set pcolor white
+      set plabel "wall"
+      set plabel-color black
+    ]
+    set i i - 1
+  ]
+  set i num-rest
+  while [i > 0] [
+    ask one-of patches with [pcolor = black and not any? turtles-on self] [
+      set pcolor lime
+      set plabel lime-reward
+      set plabel-color white
+    ]
+    set i i - 1
+  ]
+  set i num-fire
+  while [i > 0] [
+    ask one-of patches with [pcolor = black and not any? turtles-on self] [
+      set pcolor red
+      set plabel red-reward
+      set plabel-color white
+      put-utility pxcor pycor red-reward
+    ]
+    set i i - 1
   ]
 end
 
 to go
-  if any? turtles with [pcolor = red] or all? turtles [pcolor = brown][
-    stop
-  ]
+  if any? turtles with [pcolor = green] [stop]
   ask turtles [
-    take-best-action
-  ]
-  show count turtles with [pcolor = red]
+    let best-action first get-best-action
+    run-action best-action]
   tick
 end
 
-to put-utility [x y dir utility]
-  let state (list x y dir)
-  table:put u state utility
+to-report check-constraints [x y]
+  let f false
+
+  if (x <= max-pxcor) and (x >= min-pxcor) and (y <= max-pycor) and (y >= min-pycor)
+  [
+    set f true
+  ]
+  let p patch x y
+  if (p != nobody) [
+    if ([pcolor] of patch x y = white)
+  [
+    set f false
+  ]
+  ]
+  report f
 end
 
-to-report get-utility [x y dir]
-  let state (list x y dir)
-  if (table:has-key? u state) [
-    report table:get u (list x y dir)
+to-report get-actions-and-utilities
+  let x xcor
+  let y ycor
+  let best-action 0
+  let best-utility -10000
+  let possible-actions actions
+
+  let action-and-utilities table:make
+  foreach possible-actions [
+    [a] ->
+    run-action-deterministic a  ; take action
+    let utility get-utility xcor ycor
+    if (utility > best-utility)[
+      set best-action a
+      set best-utility utility
+    ]
+    setxy x y
+    table:put action-and-utilities a utility
   ]
-  put-utility x y dir 0
-  report 0
+  report action-and-utilities
+end
+
+to run-action [ action ]
+  let current-action 0
+  ifelse random-float 1 < main-action-prob [
+   set current-action action
+  ][
+   set current-action one-of (remove action actions)
+   ]
+
+   if ((current-action = "left") and (check-constraints (pxcor - 1) pycor) = true)
+  [
+      setxy pxcor - 1 pycor
+   ]
+  if ((current-action = "right") and (check-constraints (pxcor + 1) pycor))
+  [
+      setxy pxcor + 1 pycor
+   ]
+  if ((current-action = "up") and (check-constraints pxcor  (pycor + 1)))
+  [
+      setxy pxcor pycor + 1
+   ]
+  if ((current-action = "down") and (check-constraints pxcor  (pycor - 1)))
+  [
+      setxy pxcor pycor - 1
+   ]
+  if ((current-action = "none"))
+  [
+      setxy pxcor pycor
+   ]
+end
+
+to run-action-deterministic [ action ]
+  let current-action action
+
+   if ((current-action = "left") and (check-constraints (pxcor - 1) pycor) = true)
+  [
+      setxy pxcor - 1 pycor
+   ]
+  if ((current-action = "right") and (check-constraints (pxcor + 1) pycor))
+  [
+      setxy pxcor + 1 pycor
+   ]
+  if ((current-action = "up") and (check-constraints pxcor  (pycor + 1)))
+  [
+      setxy pxcor pycor + 1
+   ]
+  if ((current-action = "down") and (check-constraints pxcor  (pycor - 1)))
+  [
+      setxy pxcor pycor - 1
+   ]
+  if ((current-action = "none"))
+  [
+      setxy pxcor pycor
+   ]
+end
+
+to-report get-reward
+  if (pcolor = red) [report red-reward]
+  if (pcolor = green) [report green-reward]
+  if (pcolor = black) [report black-reward]
+  if (pcolor = lime) [report lime-reward]
+  if (pcolor = white) [report -100]
+
 end
 
 to value-iteration
@@ -73,19 +184,18 @@ to value-iteration
 
   while [delta > epsilon * (1 - gamma) / gamma][
     set delta 0
-    ask patches [
-      foreach headings [
-        [h] -> let dir h
+    ask patches with [pcolor = black or pcolor = lime][
+      foreach actions [
+        [a] ->
         let x pxcor
         let y pycor
         let best-action 0
         ask my-turtle [
           setxy x y
-          set heading dir
           let best-utility item 1 get-best-action
-          let current-utility get-utility x y dir
+          let current-utility get-utility x y
           let new-utility (get-reward + gamma * best-utility)
-          put-utility x y dir new-utility
+          put-utility x y new-utility
           if (abs (current-utility - new-utility) > delta)[
             set delta abs (current-utility - new-utility)
           ]
@@ -101,55 +211,56 @@ end
 to-report get-best-action
   let x xcor
   let y ycor
-  let dir heading
   let best-action 0
   let best-utility -10000
   foreach actions [
     [a] ->
-    run a  ; take action
-    let utility-of-action get-utility xcor ycor heading
+    run-action-deterministic a  ; take action
+    let utility-of-action get-utility xcor ycor * main-action-prob
+
+    foreach (remove a actions) [
+      [b] ->
+      setxy x y
+      run-action-deterministic b
+      set utility-of-action utility-of-action + (get-utility xcor ycor * ((1 - main-action-prob) / 4))
+    ]
+
     if (utility-of-action > best-utility)[
     set best-action a
     set best-utility utility-of-action
     ]
     setxy x y
-    set heading dir
-  ]
+   ]
   report (list best-action best-utility)
 end
 
 to take-best-action
   let best-action first get-best-action
-  let chosen-action 0
-  if-else pcolor = cyan [
-    set chosen-action one-of actions
-  ][
-    if-else random 100 < best-probability [
-      set chosen-action best-action
-    ]
-    [
-      set chosen-action one-of filter [x -> x != best-action] actions
-    ]
-  ]
-  run chosen-action
+  run-action best-action
 end
 
-to-report get-reward
-  if (pcolor = brown) [report target-reward]
-  if (pcolor = white) [report wall-reward]
-  if (pcolor = black) [report path-reward]
-  if (pcolor = red) [report fire-reward]
-  if (pcolor = green) [report rest-reward]
+to put-utility [x y utility]
+  let state (list x y)
+  table:put u state utility
+end
+
+to-report get-utility [x y]
+  let state (list x y)
+  if (table:has-key? u state) [
+    report table:get u (list x y)
+  ]
+  put-utility x y 0
+  report 0
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-210
-10
-728
-529
+419
+37
+787
+346
 -1
 -1
-30.0
+60.0
 1
 10
 1
@@ -159,38 +270,23 @@ GRAPHICS-WINDOW
 0
 0
 1
--8
-8
--8
-8
+-2
+3
+-1
+3
 0
 0
 1
 ticks
 30.0
 
-SLIDER
-740
-12
-912
-45
-num
-num
-0
-100
-2.0
-1
-1
-NIL
-HORIZONTAL
-
 BUTTON
-59
-23
-122
-56
+28
+34
+101
+67
 NIL
-setup\n
+setup
 NIL
 1
 T
@@ -202,10 +298,10 @@ NIL
 1
 
 BUTTON
-133
-23
-196
-56
+223
+37
+295
+70
 NIL
 go
 NIL
@@ -218,41 +314,77 @@ NIL
 NIL
 1
 
-SLIDER
-741
-62
-913
-95
-epsilon
-epsilon
-0
-0.1
-0.01
-0.005
+INPUTBOX
+38
+89
+199
+149
+green-reward
+20.0
 1
-NIL
-HORIZONTAL
+0
+Number
 
-SLIDER
-740
-110
-912
-143
-gamma
-gamma
+INPUTBOX
+219
+90
+380
+150
+main-action-prob
+0.5
+1
 0
+Number
+
+INPUTBOX
+38
+160
+199
+220
+red-reward
+-10.0
 1
-0.97
-0.01
+0
+Number
+
+INPUTBOX
+39
+227
+200
+287
+black-reward
+-1.0
 1
-NIL
-HORIZONTAL
+0
+Number
+
+INPUTBOX
+218
+155
+379
+215
+epsilon
+0.05
+1
+0
+Number
+
+INPUTBOX
+216
+228
+377
+288
+gamma
+0.95
+1
+0
+Number
 
 BUTTON
-62
-69
-198
-102
+107
+35
+215
+68
 NIL
 value-iteration
 NIL
@@ -266,11 +398,11 @@ NIL
 1
 
 PLOT
-747
-369
-947
-519
-delta
+421
+368
+621
+518
+plot 1
 NIL
 NIL
 0.0
@@ -281,121 +413,110 @@ true
 false
 "" ""
 PENS
+"default" 1.0 0 -16777216 true "" "plot delta"
 
 SLIDER
-739
-157
-911
-190
-best-probability
-best-probability
+226
+375
+398
+408
+max-x
+max-x
 0
-100
-100.0
+10
+4.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-741
-204
-913
-237
-walls-probability
-walls-probability
+225
+418
+397
+451
+max-y
+max-y
 0
-100
-20.0
+10
+4.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-742
-255
-914
-288
-fire-probability
-fire-probability
-0
-100
-20.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-744
-303
-916
-336
-rest-probability
-rest-probability
-0
-100
-10.0
-1
-1
-NIL
-HORIZONTAL
-
-INPUTBOX
-48
-117
-203
-177
-wall-reward
--200.0
-1
-0
-Number
-
-INPUTBOX
-50
-186
-205
-246
-fire-reward
--100.0
-1
-0
-Number
-
-INPUTBOX
-51
-256
-206
-316
-path-reward
--0.5
-1
-0
-Number
-
-INPUTBOX
-51
-322
-206
-382
-target-reward
-50.0
-1
-0
-Number
-
-INPUTBOX
-52
-390
+35
+373
 207
-450
-rest-reward
-5.0
+406
+num-walls
+num-walls
+0
+10
+4.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+37
+414
+209
+447
+num-rest
+num-rest
+0
+10
+3.0
+1
+1
+NIL
+HORIZONTAL
+
+INPUTBOX
+39
+291
+194
+351
+lime-reward
+0.5
 1
 0
 Number
+
+BUTTON
+300
+39
+383
+72
+NIL
+go
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SLIDER
+35
+459
+207
+492
+num-fire
+num-fire
+0
+10
+2.0
+1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?

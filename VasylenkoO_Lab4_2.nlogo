@@ -67,17 +67,11 @@ to setup
 end
 
 to go
-   ask turtles [
-    if pcolor = green [
-      show "Victory!"
-      stop
-    ]
-  ]
-  tick
+  if any? turtles with [pcolor = green] [stop]
   ask turtles [
     let best-action first get-best-action
     run-action best-action]
-  wait 1
+  tick
 end
 
 to-report check-constraints [x y]
@@ -121,7 +115,11 @@ end
 
 to run-action [ action ]
   let current-action 0
-  ifelse random-float 1 < main-action-prob [
+  let act-prob main-action-prob
+  if pcolor = sky [
+    set act-prob 0.2
+  ]
+  ifelse random-float 1 < act-prob [
    set current-action action
   ][
    set current-action one-of (remove action actions)
@@ -193,7 +191,7 @@ to value-iteration
 
   while [delta > epsilon * (1 - gamma) / gamma][
     set delta 0
-    ask patches with [pcolor = black][
+    ask patches with [pcolor = black or pcolor = sky][
       foreach actions [
         [a] ->
         let x pxcor
@@ -225,13 +223,22 @@ to-report get-best-action
   foreach actions [
     [a] ->
     run-action-deterministic a  ; take action
-    let utility-of-action get-utility xcor ycor * main-action-prob
+    let act-prob main-action-prob
+    let is-ice? pcolor = sky
+    if is-ice? [
+      set act-prob 0.2
+    ]
+    let utility-of-action get-utility xcor ycor * act-prob
 
     foreach (remove a actions) [
       [b] ->
       setxy x y
       run-action-deterministic b
-      set utility-of-action utility-of-action + (get-utility xcor ycor * (other-actions-prob / 4))
+      ifelse is-ice? [
+        set utility-of-action utility-of-action + (get-utility xcor ycor * 0.2)
+      ] [
+        set utility-of-action utility-of-action + (get-utility xcor ycor * (other-actions-prob / 4))
+      ]
     ]
 
     if (utility-of-action > best-utility)[
@@ -474,7 +481,7 @@ num-walls
 num-walls
 0
 10
-2.0
+4.0
 1
 1
 NIL
@@ -489,7 +496,7 @@ num-ice
 num-ice
 0
 10
-2.0
+5.0
 1
 1
 NIL
@@ -505,6 +512,23 @@ sky-reward
 1
 0
 Number
+
+BUTTON
+104
+78
+167
+111
+NIL
+go
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
