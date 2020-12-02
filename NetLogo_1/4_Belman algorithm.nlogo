@@ -6,6 +6,8 @@ globals [
   walls-near-person
  ]
 
+; Vasya: додав зміну розміру поля (max-x, max-y), додав зміну кількості стін, вогняних ям (fire) та точок відпочинку (rest)
+; зробив випадкове розташування елементів, в початковому варіанті карта статична
 to setup
   clear-all
   reset-ticks
@@ -63,8 +65,16 @@ to setup
   ]
 end
 
+; Vasya: Додав перевірку на перемогу (якщо потрапив в зелену клітинку) або поразку (якщо потрапив в червону)
 to go
-  if any? turtles with [pcolor = green] [stop]
+  if any? turtles with [pcolor = green] [
+    show "Victory!"
+    stop
+  ]
+  if any? turtles with [pcolor = red] [
+    show "You burned to death!"
+    stop
+  ]
   ask turtles [
     let best-action first get-best-action
     run-action best-action]
@@ -165,6 +175,7 @@ to run-action-deterministic [ action ]
    ]
 end
 
+; Vasya: додав lime-reward за клітинки відпочинку (rest)
 to-report get-reward
   if (pcolor = red) [report red-reward]
   if (pcolor = green) [report green-reward]
@@ -222,6 +233,10 @@ to-report get-best-action
       [b] ->
       setxy x y
       run-action-deterministic b
+
+; Vasya прибрав other-actions-prob (ймовірність зробити не основну дію) замість цього 1 - main-action-prob
+; Чим більше main-action-prob - тим частіше агент може випадково відхилитися від основної стратегії
+; ця ймовірність впливає на оцінки виграшів. Чим менше main-action-prob - тим більше вплив сусідів
       set utility-of-action utility-of-action + (get-utility xcor ycor * ((1 - main-action-prob) / 4))
     ]
 
@@ -331,7 +346,7 @@ INPUTBOX
 380
 150
 main-action-prob
-0.5
+0.95
 1
 0
 Number

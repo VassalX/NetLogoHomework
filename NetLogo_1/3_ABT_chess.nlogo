@@ -4,10 +4,10 @@ breed [figures figure]
 
 undirected-link-breed [edges edge]
 
+; Vasya: додав future-steps(можливі ходи)
 figures-own [
   domain
-  possible-steps
-  step-performed?
+  future-steps
   message-queue  ;; список вхідних повідомлень у форматі [тип-повідомлення текст-повідомлення]
   lower-naybors  ;; список сусідів з меншим пріоритетом
   naybors        ;; розширений список сусідів
@@ -19,6 +19,7 @@ edges-own [weight]
 
 globals [all-positions x-positions y-positions]
 
+; Vasya: модифікував, видалив зайві фігури
 to setup
   clear-all
   reset-ticks
@@ -28,20 +29,18 @@ to setup
   set-positions
   draw-board
   create-figures queens [
+    set future-steps []
     setxy 0 0
     set color white
     set domain all-positions
     set shape "chess queen"
-    set step-performed? false
-    set possible-steps []
   ]
   create-figures knights [
+    set future-steps []
     setxy 3 0
     set color white
     set domain all-positions
     set shape "chess knight"
-    set step-performed? false
-    set possible-steps []
   ]
 
   ask figures [
@@ -55,14 +54,6 @@ to setup
     set label who
   ]
 
-end
-
-to-report w-bishops-positions
-  report filter [a -> ((first a) mod 2) != ((last a) mod 2)] all-positions
-end
-
-to-report b-bishops-positions
-  report filter [a -> ((first a) mod 2) = ((last a) mod 2)] all-positions
 end
 
 to set-positions
@@ -110,16 +101,22 @@ to move-to-cell [a]
   setxy (item 0 a) (item 1 a)
 end
 
+; Vasya: модифікував, змінив встановлення початкових обмежень
 ; визначення необхідних для алгоритму АБТ структур і змінних
 to setup-abt
-  ; призначаємо випадково кольори, визначаємо множини сусідів
+  ; Vasya: перевірка, щоб дошка не була надто мала
+  if count figures > max-x * max-y [
+    show "Too many figures!"
+    stop
+  ]
+  ; Vasya: випадково розставляємо фігури
   assign-figures
   ask figures [
     set message-queue []
     set lower-naybors []
     set local-view table:make
     set naybors sort link-neighbors
-    update-possible-steps
+    update-future-steps
     let i who
     ; вибірка сусідів з нижчим пріоритетом
     foreach naybors [
@@ -130,35 +127,37 @@ to setup-abt
       ]
     ]
     ; встановлення початкових обмежень
+    ; Vasya: Встановлюємо обмеження поточної фігури для кожної клітинки
     set no-goods []
     foreach domain [
       [pos] ->
-      set-possible-steps pos shape
+      set-future-steps pos shape
       foreach naybors [
-        [a] ->
+        [a] -> ; a - сусід
         let w ([who] of a)
         set no-goods sentence no-goods map [
-          [b] ->
-          normalize-nogood list (list who pos) (list w b) ] possible-steps
+          [b] -> ; b - можливий крок.
+          normalize-nogood list (list who pos) (list w b) ] future-steps
         ]
       ]
+    ; Vasya: встановлюємо зворотні обмеження від сусідів, якщо вони іншого типу
     foreach naybors [
       [a] ->
       if not ([shape] of a = shape) [
         let w ([who] of a)
         foreach [domain] of a [
           [pos] ->
-          set-possible-steps pos ([shape] of a)
+          set-future-steps pos ([shape] of a)
           set no-goods sentence no-goods map [
             [b] ->
-            normalize-nogood list (list w pos) (list who b) ] possible-steps
+            normalize-nogood list (list w pos) (list who b) ] future-steps
           ]
         ]
       ]
-    update-possible-steps
+    update-future-steps
    ]
   ; розсилання повідомлень ок? зі своїм кольором сусідам з нижчим пріоритетом
-    ask figures [send-out-new-value]
+  ask figures [send-out-new-value]
 end
 
 to go-abt
@@ -176,16 +175,17 @@ to go-abt
   ]
 end
 
+; Vasya: функція рахує лінки з порушеннями (одна фігура б'є іншу)
 to-report bad-links
   report links with [
-    (list ([xcor] of end2) ([ycor] of end2)) = (list ([xcor] of end1) ([ycor] of end1)) or
-    member? (list ([xcor] of end2) ([ycor] of end2)) ([possible-steps] of end1) or
-    member? (list ([xcor] of end1) ([ycor] of end1)) ([possible-steps] of end2)
+    (list ([xcor] of end1) ([ycor] of end1)) = (list ([xcor] of end2) ([ycor] of end2)) or
+    member? (list ([xcor] of end2) ([ycor] of end2)) ([future-steps] of end1) or
+    member? (list ([xcor] of end1) ([ycor] of end1)) ([future-steps] of end2)
   ]
 end
 
 to-report constraint-violations?
-  report any? bad-links
+  report count bad-links > 0
 end
 
 to-report normalize-nogood [nogood]
@@ -275,6 +275,7 @@ to handle-add-neighbor [someone]
          ]
       ]
     ]
+    ; Vasya: замінив колір на координати
    let message (list "ok" (list who (list xcor ycor)))
     ask figure someone [
       set message-queue lput message message-queue
@@ -283,6 +284,7 @@ to handle-add-neighbor [someone]
 
 end
 
+; Vasya: модифікував для пересування фігур та оновлення future-steps
 ; перевірка сумісності свого кольору множині поточних nogoods
 to check-local-view
   if not can-i-be? (list xcor ycor) [
@@ -299,7 +301,7 @@ to check-local-view
 
         move-to-cell try-this
 
-        update-possible-steps
+        update-future-steps
         set can-be-something-else true
         send-out-new-value
       ]
@@ -360,15 +362,18 @@ to-report find-new-nogood
   report table:to-list local-view
 end
 
-to set-possible-steps [pos sh]
-  set possible-steps get-possible-steps pos sh
+; Vasya: функція, для встановлення future steps за позицією та типом
+to set-future-steps [pos sh]
+  set future-steps get-future-steps pos sh
 end
 
-to update-possible-steps
-  set possible-steps get-possible-steps (list xcor ycor) shape
+; Vasya: оновлення future-steps за поточною позицією та типом
+to update-future-steps
+  set future-steps get-future-steps (list xcor ycor) shape
 end
 
-to-report get-possible-steps [pos sh]
+; Vasya: згенерувати список можливих кроків
+to-report get-future-steps [pos sh]
   let x (first pos)
   let y (last pos)
   let steps []
@@ -500,7 +505,7 @@ max-x
 max-x
 0
 10
-4.0
+5.0
 1
 1
 NIL
@@ -515,7 +520,7 @@ max-y
 max-y
 0
 10
-4.0
+5.0
 1
 1
 NIL
@@ -530,7 +535,7 @@ queens
 queens
 0
 10
-4.0
+0.0
 1
 1
 NIL
@@ -545,7 +550,7 @@ knights
 knights
 0
 20
-0.0
+8.0
 1
 1
 NIL

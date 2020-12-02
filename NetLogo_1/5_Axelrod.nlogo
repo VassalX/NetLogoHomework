@@ -1,13 +1,13 @@
 globals [
   ;;number of turtles with each strategy
   num-random
-  num-cooperate
-  num-defect
-  num-tit-for-tat
-  num-unforgiving
+  num-cooperate ; AlwaysCooperate
+  num-defect ; AlwaysDefect
+  num-tit-for-tat ; Зуб за зуб
+  num-unforgiving ; Grim-trigger
   num-unknown
-  num-soft-gruder
-  soft-gruder-seq
+  num-soft-gruder ; Soft-gruder
+  soft-gruder-seq ; Vasya: Додав послідовність d,d,d,d,c,c (d-defect, c-cooperate) для soft-gruder
 
   ;;number of interactions by each strategy
   num-random-games
@@ -16,7 +16,7 @@ globals [
   num-tit-for-tat-games
   num-unforgiving-games
   num-unknown-games
-  num-soft-gruder-games
+  num-soft-gruder-games ; Vasya: Додав кількість ігор soft-gruder
 
   ;;total score of all turtles playing each strategy
   random-score
@@ -25,7 +25,7 @@ globals [
   tit-for-tat-score
   unforgiving-score
   unknown-score
-  soft-gruder-score
+  soft-gruder-score ; Vasya: додав загальний виграш soft-gruder
 ]
 
 turtles-own [
@@ -37,7 +37,8 @@ turtles-own [
   partner           ;;WHO of my partner (nobody if not partnered)
   partner-history   ;;a list containing information about past interactions
                     ;;with other turtles (indexed by WHO values)
-  soft-gruder-states
+  soft-gruder-states ; Vasya: додав номер поточного стану soft-gruder для кожного супротивника
+  ; (номер останньої виконаної дії з soft-gruder-seq)
 ]
 
 
@@ -45,6 +46,7 @@ turtles-own [
 ;;;Setup Procedures;;;
 ;;;;;;;;;;;;;;;;;;;;;;
 
+; Vasya: додав встановлення soft-gruder-seq (true - робимо defect)
 to setup
   clear-all
   set soft-gruder-seq [true true true true false false]
@@ -53,6 +55,7 @@ to setup
   reset-ticks
 end
 
+; Vasya: додав num-soft-gruder
 ;;record the number of turtles created for each strategy
 ;;The number of turtles of each strategy is used when calculating average payoffs.
 ;;Slider values might change over time, so we need to record their settings.
@@ -73,6 +76,7 @@ to setup-turtles
   setup-common-variables ;;sets the variables that all turtles share
 end
 
+; Vasya: додав створення черепашок для soft-gruder (коричневі)
 ;;create the appropriate number of turtles playing each strategy
 to make-turtles
   create-turtles num-random [ set strategy "random" set color gray - 1 ]
@@ -84,6 +88,7 @@ to make-turtles
   create-turtles num-soft-gruder [set strategy "soft-gruder" set color brown]
 end
 
+; Vasya: додав soft-gruder-states (початковий стан -1)
 ;;set the variables that all turtles share
 to setup-common-variables
   ask turtles [
@@ -158,6 +163,7 @@ to partner-up ;;turtle procedure
   ]
 end
 
+; Vasya: додав soft-gruder
 ;;choose an action based upon the strategy being played
 to select-action ;;turtle procedure
   if strategy = "random" [ act-randomly ]
@@ -193,6 +199,7 @@ to get-payoff
   ]
 end
 
+; Vasya: додав оновлення історії супротивника для soft-gruder
 ;;update PARTNER-HISTORY based upon the strategy being played
 to update-history
   if strategy = "random" [ act-randomly-history-update ]
@@ -211,15 +218,22 @@ end
 
 ;;All the strategies are described in the Info tab.
 
+; Vasya: створив функцію для soft-gruder
+; кооперацiя поки опонент не почав обманювати, потiм
+; (щодо цього опонента запускаємо послiдовнiсть d,d,d,d,c,c).
+; Потiм знову приймаємо рiшення.
 to soft-gruder
   set num-soft-gruder-games num-soft-gruder-games + 1
   set partner-defected? item ([who] of partner) partner-history
   let state item ([who] of partner) soft-gruder-states
+  ; коли ми виконали послідовність щодо даного супротивника - втсановлюємо state -1
   if state > 4 [
     set soft-gruder-states replace-item ([who] of partner) soft-gruder-states -1
     set state -1
   ]
   ifelse state = -1 [
+    ; якщо послідовність ще не почалась - перевіряємо, чи нас зрадили
+    ; якщо зрадили - запускаємо послідовність, інакше кооперуємо
     ifelse (partner-defected?) [
       set soft-gruder-states replace-item ([who] of partner) soft-gruder-states 0
       set defect-now? item 0 soft-gruder-seq
@@ -227,11 +241,13 @@ to soft-gruder
       set defect-now? false
     ]
   ] [
+    ; якщо послідовність запущена - виконуємо її не залежно від дій супротивника
     set soft-gruder-states replace-item ([who] of partner) soft-gruder-states (state + 1)
     set defect-now? item (state + 1) soft-gruder-seq
   ]
 end
 
+; Vasya: оновлення історії супротивника для soft-gruder по-суті дублює історію для tit-for-tat
 to soft-gruder-history-update
   set partner-history
     (replace-item ([who] of partner) partner-history partner-defected?)
